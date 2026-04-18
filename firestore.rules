@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'orderId',
+          'userId',
+          'customer',
+          'addressId',
+          'address',
+          'items',
+          'billing',
+          'subtotal',
+          'total',
+          'createdAt',
+          'status'
+        ])
+        && request.resource.data.status == 'pending';
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /bills/{billId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'scheduled';
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /admins/{adminId} {
+      allow read: if isAdmin() || isOwner(adminId);
+      allow write: if false;
+    }
+
+    match /feedback/{feedbackId} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly([
+          'customerName',
+          'phone',
+          'email',
+          'message',
+          'orderId',
+          'userId',
+          'source',
+          'status',
+          'rating',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.status == 'open';
+      allow update, delete: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /app_settings/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read, write: if isOwner(userId) || isAdmin();
+
+      match /cart/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      match /orders/{orderId} {
+        // Orders are stored in the global /orders collection.
+        // Keep user subcollection read-only (and ideally empty) for safety.
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false;
+      }
+
+      match /bookings/{bookingId} {
+        // Bookings are stored in the global /bookings collection.
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if false;
+      }
+
+      match /addresses/{addressId} {
+        allow read, write: if isOwner(userId) || isAdmin();
+      }
+
+      match /bills/{billId} {
+        allow read: if isOwner(userId) || isAdmin();
+        allow write: if isAdmin();
+      }
+    }
+  }
+}

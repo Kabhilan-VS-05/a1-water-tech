@@ -1,0 +1,182 @@
+{
+  "a1-pureflow-rouv": {
+    "name": "A1 PureFlow RO + UV",
+    "category": "Purifiers",
+    "imageUrl": "/a1-pureflow-ro-uv.png",
+    "price": 18999,
+    "rating": 4.8,
+    "tag": "Best Seller",
+    "tds": "Up to 2000 ppm",
+    "warranty": "1 year",
+    "description": "7-stage purification with copper infusion and smart tank monitoring.",
+    "features": [
+      "12 L/hr purification rate",
+      "Copper + mineralizer",
+      "Smart auto-clean",
+      "Energy saving mode"
+    ],
+    "recommendation": "Ideal for hard water and apartment usage."
+  },
+  "a1-aquashield-ro": {
+    "name": "A1 AquaShield RO",
+    "category": "Purifiers",
+    "imageUrl": "/A1%20AquaShield%20RO.png",
+    "price": 14499,
+    "rating": 4.7,
+    "tag": "New Arrival",
+    "tds": "Up to 1500 ppm",
+    "warranty": "1 year",
+    "description": "Compact 6-stage RO with quick filter replacement design.",
+    "features": [
+      "Space-saving design",
+      "6-stage RO filtration",
+      "Low wastage recovery",
+      "Child lock faucet"
+    ],
+    "recommendation": "Great for 2-4 member families."
+  },
+  "a1-mineral-plus": {
+    "name": "A1 Mineral+ Cartridge",
+    "category": "Filters",
+    "imageUrl": "/a1-mineral-plus-cartridge.png",
+    "price": 1299,
+    "rating": 4.6,
+    "tag": "Add-On",
+    "tds": "All TDS",
+    "warranty": "6 months",
+    "description": "Enhances taste and restores essential minerals.",
+    "features": [
+      "Boosts calcium and magnesium",
+      "Easy twist-lock",
+      "6 month life",
+      "Food-grade material"
+    ],
+    "recommendation": "Recommended with RO systems for better taste."
+  },
+  "a1-sediment-guard": {
+    "name": "A1 Sediment Guard",
+    "category": "Filters",
+    "imageUrl": "/A1%20Sediment%20Guard.png",
+    "price": 799,
+    "rating": 4.5,
+    "tag": "Value",
+    "tds": "All TDS",
+    "warranty": "6 months",
+    "description": "High-capacity pre-filter for dusty and borewell areas.",
+    "features": [
+      "Sediment filtration 5 micron",
+      "Longer filter life",
+      "Easy wall mount",
+      "Washable housing"
+    ],
+    "recommendation": "Essential for homes with sandy water."
+  },
+  "a1-servicecare-annual": {
+    "name": "A1 ServiceCare Annual",
+    "category": "Services",
+    "imageUrl": "/ServiceCare%20Annual.png",
+    "price": 2499,
+    "rating": 4.9,
+    "tag": "Recommended",
+    "tds": "All TDS",
+    "warranty": "Plan",
+    "description": "Quarterly checkups and priority support for a full year.",
+    "features": [
+      "4 scheduled services",
+      "Priority support",
+      "Filter health check",
+      "Emergency call coverage"
+    ],
+    "recommendation": "Best value for ongoing purifier health."
+  },
+  "a1-commercial-ro-50": {
+    "name": "A1 Commercial RO 50L",
+    "category": "Commercial",
+    "imageUrl": "/A1%20Commercial%20RO%2050L.png",
+    "price": 64000,
+    "rating": 4.7,
+    "tag": "Pro",
+    "tds": "Up to 3000 ppm",
+    "warranty": "2 years",
+    "description": "High output system designed for cafes and offices.",
+    "features": [
+      "50 L/hr output",
+      "Stainless steel frame",
+      "Auto flush system",
+      "Low maintenance cost"
+    ],
+    "recommendation": "Designed for 30+ people usage."
+  },
+  "a1-uv-compact": {
+    "name": "A1 UV Compact",
+    "category": "Purifiers",
+    "imageUrl": "/UV%20Compact.png",
+    "price": 9499,
+    "rating": 4.4,
+    "tag": "Budget",
+    "tds": "Up to 800 ppm",
+    "warranty": "1 year",
+    "description": "UV + UF system for low TDS municipal water.",
+    "features": [
+      "UV + UF purification",
+      "8L storage",
+      "Low power",
+      "Slim body"
+    ],
+    "recommendation": "Perfect for city water supply."
+  },
+  "a1-smart-dispenser": {
+    "name": "A1 Smart Water Dispenser",
+    "category": "Accessories",
+    "imageUrl": "/Smart%20Water%20Dispenser.png",
+    "price": 5499,
+    "rating": 4.6,
+    "tag": "Trending",
+    "tds": "All TDS",
+    "warranty": "1 year",
+    "description": "Hot + ambient dispensing with child-safe design.",
+    "features": [
+      "Two temperature modes",
+      "Child lock",
+      "Stainless steel tank",
+      "Energy efficient"
+    ],
+    "recommendation": "Pairs well with RO systems."
+  },
+  "a1-copper-guard-pro": {
+    "name": "A1 Copper Guard Pro",
+    "category": "Purifiers",
+    "imageUrl": "/A1%20Copper%20Guard%20Pro.png",
+    "price": 21999,
+    "rating": 4.9,
+    "tag": "Premium",
+    "tds": "Up to 2500 ppm",
+    "warranty": "2 years",
+    "description": "8-stage smart purifier with live TDS display and copper enrichment.",
+    "features": [
+      "Live TDS meter",
+      "Auto UV sterilization",
+      "Copper enrichment",
+      "2-year motor warranty"
+    ],
+    "recommendation": "Best for families needing advanced monitoring and long life."
+  },
+  "a1-ro-membrane-kit": {
+    "name": "A1 RO Membrane Kit",
+    "category": "Filters",
+    "imageUrl": "/A1%20RO%20Membrane%20Kit.png",
+    "price": 1899,
+    "rating": 4.7,
+    "tag": "Top Rated",
+    "tds": "Up to 2000 ppm",
+    "warranty": "9 months",
+    "description": "High-rejection membrane replacement kit for consistent purification.",
+    "features": [
+      "Compatible with most RO units",
+      "High salt rejection",
+      "Quick swap connector",
+      "Leak-tested quality"
+    ],
+    "recommendation": "Recommended every 9-12 months depending on source water."
+  }
+}

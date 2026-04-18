@@ -10,7 +10,7 @@ function assertCognitoConfig() {
     )
   }
 }
-
+// test CI/CD trigger
 let cognitoModulePromise
 
 function loadCognitoModule() {

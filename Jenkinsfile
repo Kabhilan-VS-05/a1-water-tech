@@ -52,8 +52,8 @@ pipeline {
     stage('Build Frontend') {
       steps {
         dir("${FRONTEND_DIR}") {
-          // Use node container to install and build (avoid local npm requirement)
-          sh 'docker run --rm -v "$(pwd):/app" -w /app node:20 sh -c "npm ci && npm run build"'
+          // Stream workspace into container without using volume mounts, build it, and stream the required output back!
+          sh 'tar cf - . | docker run --rm -i -w /app node:20 sh -c "tar xf - && npm ci && npm run build && tar cf - dist node_modules" | tar xf -'
         }
       }
     }
@@ -61,8 +61,8 @@ pipeline {
     stage('Build Backend') {
       steps {
         dir("${BACKEND_DIR}") {
-          // Use node container to install backend dependencies
-          sh 'docker run --rm -v "$(pwd):/app" -w /app node:20 npm ci'
+          // Stream workspace into container to install deps safely
+          sh 'tar cf - . | docker run --rm -i -w /app node:20 sh -c "tar xf - && npm ci && tar cf - node_modules" | tar xf -'
         }
       }
     }
@@ -74,8 +74,8 @@ pipeline {
           sh 'test -d dist'
         }
         dir("${BACKEND_DIR}") {
-          // Verify backend code tests
-          sh 'docker run --rm -v "$(pwd):/app" -w /app node:20 npm test'
+          // Verify backend code tests by streaming the context dynamically
+          sh 'tar cf - . | docker run --rm -i -w /app node:20 sh -c "tar xf - && npm test"'
         }
       }
     }

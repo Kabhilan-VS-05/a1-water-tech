@@ -87,8 +87,9 @@ export default function Home() {
               Service-First Water Support
             </span>
             <h1 className="text-4xl lg:text-6xl font-extrabold leading-tight mb-6 tracking-tight">
-              Book purifier service, installation, and water checks <span className="text-indigo-400">before you shop</span>
+              Book purifier service, installation, and water checks <span className="text-indigo-400">TODAY!</span>
             </h1>
+
             <p className="text-lg text-slate-300 mb-8 leading-relaxed max-w-xl">
               Start with technician visits, annual care plans, and local support for Tamil Nadu water conditions. Product buying is still available, but service booking now leads the journey.
             </p>

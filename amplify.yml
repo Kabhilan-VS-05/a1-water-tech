@@ -1,0 +1,21 @@
+version: 1
+applications:
+  - appRoot: a1-water-online-shop
+    env:
+      variables:
+        AMPLIFY_MONOREPO_APP_ROOT: a1-water-online-shop
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*

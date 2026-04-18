@@ -1,0 +1,58 @@
+{
+  "install-standard": {
+    "name": "Standard Installation",
+    "imageUrl": "/Services.png",
+    "price": 499,
+    "duration": "Within 24 hours",
+    "description": "Certified installation with pipe fitting and water test."
+  },
+  "service-annual": {
+    "name": "ServiceCare Annual",
+    "imageUrl": "/ServiceCare%20Annual.png",
+    "price": 2499,
+    "duration": "12 months",
+    "description": "Quarterly visits, filter checks, and priority support."
+  },
+  "service-premium": {
+    "name": "ServiceCare Premium",
+    "imageUrl": "/Services.png",
+    "price": 3999,
+    "duration": "12 months",
+    "description": "Includes spare filters and emergency callouts."
+  },
+  "service-emergency-visit": {
+    "name": "Emergency Visit",
+    "imageUrl": "/Services.png",
+    "price": 899,
+    "duration": "Same day",
+    "description": "Fast technician dispatch for urgent purifier breakdowns."
+  },
+  "install-express": {
+    "name": "Express Installation",
+    "imageUrl": "/Services.png",
+    "price": 799,
+    "duration": "Within 6 hours",
+    "description": "Priority installation slot with expedited technician allocation."
+  },
+  "service-filter-replacement": {
+    "name": "Filter Replacement Visit",
+    "imageUrl": "/ServiceCare%20Annual.png",
+    "price": 1199,
+    "duration": "Within 24 hours",
+    "description": "Technician visit for sediment, carbon, or membrane replacement and system check."
+  },
+  "service-deep-clean": {
+    "name": "Deep Clean & Sanitization",
+    "imageUrl": "/Services.png",
+    "price": 1499,
+    "duration": "90 minutes",
+    "description": "Full internal cleaning, tank sanitization, and output quality inspection."
+  },
+  "service-water-quality-test": {
+    "name": "Home Water Quality Test",
+    "imageUrl": "/Services.png",
+    "price": 299,
+    "duration": "30 minutes",
+    "description": "At-home TDS and source water quality check with purifier recommendation."
+  }
+}

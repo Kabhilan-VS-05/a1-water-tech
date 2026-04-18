@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "381202778843",
+    "project_id": "a1-water-tech",
+    "storage_bucket": "a1-water-tech.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:381202778843:android:1f41844485a1f4fbfd9afe",
+        "android_client_info": {
+          "package_name": "com.example.a1_tech_billing"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD3XOZPvnR5UMB61LiSkDfNZJbhMxYXLJg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

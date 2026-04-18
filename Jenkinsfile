@@ -53,7 +53,8 @@ pipeline {
       steps {
         dir("${FRONTEND_DIR}") {
           // Stream workspace into container without using volume mounts, build it, and stream the required output back!
-          sh 'tar cf - . | docker run --rm -i -w /app node:20 sh -c "tar xf - && npm ci && npm run build && tar cf - dist node_modules" | tar xf -'
+          // We redirect npm logs to stderr (>&2) so they don't corrupt the tar data stream!
+          sh 'tar cf - . | docker run --rm -i -w /app node:20 sh -c "tar xf - && npm ci >&2 && npm run build >&2 && tar cf - dist node_modules" | tar xf -'
         }
       }
     }
@@ -62,7 +63,7 @@ pipeline {
       steps {
         dir("${BACKEND_DIR}") {
           // Stream workspace into container to install deps safely
-          sh 'tar cf - . | docker run --rm -i -w /app node:20 sh -c "tar xf - && npm ci && tar cf - node_modules" | tar xf -'
+          sh 'tar cf - . | docker run --rm -i -w /app node:20 sh -c "tar xf - && npm ci >&2 && tar cf - node_modules" | tar xf -'
         }
       }
     }

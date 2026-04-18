@@ -81,7 +81,7 @@ pipeline {
       }
     }
 
-    stage('Docker Build') {
+    stage('Docker Build') {     
       steps {
         // We use the docker-cred to get the DockerHub username dynamically
         withCredentials([usernamePassword(credentialsId: 'docker-cred', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {

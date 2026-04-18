@@ -32,45 +32,60 @@ pipeline {
             error('IMAGE_NAME is not configured.')
           }
 
-          // Image names WITHOUT docker username
           env.FRONTEND_IMAGE = "${env.IMAGE_NAME}-frontend:${env.BUILD_NUMBER}"
           env.BACKEND_IMAGE = "${env.IMAGE_NAME}-backend:${env.BUILD_NUMBER}"
         }
       }
     }
 
+    // 🔥 FRONTEND BUILD (Dockerized Node)
     stage('Build Frontend') {
       steps {
         dir("${FRONTEND_DIR}") {
-          sh 'npm ci'
-          sh 'npm run build'
+          script {
+            docker.image('node:20').inside {
+              sh 'npm ci'
+              sh 'npm run build'
+            }
+          }
         }
       }
     }
 
+    // 🔥 BACKEND BUILD
     stage('Build Backend') {
       steps {
         dir("${BACKEND_DIR}") {
-          sh 'npm ci'
+          script {
+            docker.image('node:20').inside {
+              sh 'npm ci'
+            }
+          }
         }
       }
     }
 
+    // 🔥 TEST STAGE
     stage('Test') {
       steps {
-        sh 'echo "Running validation checks"'
+        script {
+          docker.image('node:20').inside {
+            sh 'echo "Running validation checks"'
 
-        dir("${FRONTEND_DIR}") {
-          sh 'test -d dist'
-        }
+            dir("${FRONTEND_DIR}") {
+              sh 'test -d dist'
+            }
 
-        dir("${BACKEND_DIR}") {
-          sh 'test -f server.mjs'
-          sh 'node --check server.mjs'
+            dir("${BACKEND_DIR}") {
+              sh 'test -f server.mjs'
+              sh 'node --check server.mjs'
+            }
+          }
         }
       }
     }
 
+    // 🔥 DOCKER BUILD
     stage('Docker Build') {
       steps {
         sh "docker build -t ${FRONTEND_IMAGE} ${FRONTEND_DIR}"
@@ -78,6 +93,7 @@ pipeline {
       }
     }
 
+    // 🔥 DOCKER PUSH
     stage('Docker Push') {
       steps {
         withCredentials([usernamePassword(
@@ -98,6 +114,7 @@ pipeline {
       }
     }
 
+    // 🔥 KUBERNETES DEPLOY
     stage('Kubernetes Deploy') {
       steps {
         withCredentials([usernamePassword(

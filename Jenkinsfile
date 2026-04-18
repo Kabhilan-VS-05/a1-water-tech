@@ -5,6 +5,7 @@ pipeline {
     FRONTEND_DIR = 'a1-water-online-shop'
     BACKEND_DIR = 'aws-lambdas/products-api'
     K8S_DIR = 'k8s'
+    PATH = "${env.WORKSPACE}/bin:${env.PATH}"
   }
 
   options {
@@ -17,6 +18,31 @@ pipeline {
   }
 
   stages {
+    stage('Setup Tools') {
+      steps {
+        sh '''
+          mkdir -p ${WORKSPACE}/bin
+          
+          # Setup Docker CLI if missing
+          if ! command -v docker > /dev/null; then
+            echo "Downloading Docker CLI..."
+            curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-24.0.6.tgz -o docker.tgz
+            tar xzvf docker.tgz
+            mv docker/docker ${WORKSPACE}/bin/
+            chmod +x ${WORKSPACE}/bin/docker
+            rm -rf docker docker.tgz
+          fi
+          
+          # Setup Kubectl if missing
+          if ! command -v kubectl > /dev/null; then
+            echo "Downloading kubectl..."
+            curl -fsSL "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" -o ${WORKSPACE}/bin/kubectl
+            chmod +x ${WORKSPACE}/bin/kubectl
+          fi
+        '''
+      }
+    }
+
     stage('Clone') {
       steps {
         checkout scm

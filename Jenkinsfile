@@ -42,12 +42,8 @@ pipeline {
     stage('Build Frontend') {
       steps {
         dir("${FRONTEND_DIR}") {
-          script {
-            docker.image('node:20').inside {
-              sh 'npm ci'
-              sh 'npm run build'
-            }
-          }
+          sh 'docker run --rm -v $PWD:/app -w /app node:20 npm ci'
+          sh 'docker run --rm -v $PWD:/app -w /app node:20 npm run build'
         }
       }
     }
@@ -56,11 +52,7 @@ pipeline {
     stage('Build Backend') {
       steps {
         dir("${BACKEND_DIR}") {
-          script {
-            docker.image('node:20').inside {
-              sh 'npm ci'
-            }
-          }
+          sh 'docker run --rm -v $PWD:/app -w /app node:20 npm ci'
         }
       }
     }
@@ -69,17 +61,15 @@ pipeline {
     stage('Test') {
       steps {
         script {
-          docker.image('node:20').inside {
-            sh 'echo "Running validation checks"'
+          sh 'echo "Running validation checks"'
 
-            dir("${FRONTEND_DIR}") {
-              sh 'test -d dist'
-            }
+          dir("${FRONTEND_DIR}") {
+            sh 'test -d dist'
+          }
 
-            dir("${BACKEND_DIR}") {
-              sh 'test -f server.mjs'
-              sh 'node --check server.mjs'
-            }
+          dir("${BACKEND_DIR}") {
+            sh 'test -f server.mjs'
+            sh 'docker run --rm -v $PWD:/app -w /app node:20 node --check server.mjs'
           }
         }
       }
@@ -101,15 +91,15 @@ pipeline {
           usernameVariable: 'DOCKER_USERNAME',
           passwordVariable: 'DOCKER_PASSWORD'
         )]) {
-          sh '''
-          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+          sh """
+          echo "\$DOCKER_PASSWORD" | docker login -u "\$DOCKER_USERNAME" --password-stdin
 
-          docker tag ${FRONTEND_IMAGE} $DOCKER_USERNAME/${FRONTEND_IMAGE}
-          docker tag ${BACKEND_IMAGE} $DOCKER_USERNAME/${BACKEND_IMAGE}
+          docker tag ${env.FRONTEND_IMAGE} \$DOCKER_USERNAME/${env.FRONTEND_IMAGE}
+          docker tag ${env.BACKEND_IMAGE} \$DOCKER_USERNAME/${env.BACKEND_IMAGE}
 
-          docker push $DOCKER_USERNAME/${FRONTEND_IMAGE}
-          docker push $DOCKER_USERNAME/${BACKEND_IMAGE}
-          '''
+          docker push \$DOCKER_USERNAME/${env.FRONTEND_IMAGE}
+          docker push \$DOCKER_USERNAME/${env.BACKEND_IMAGE}
+          """
         }
       }
     }
@@ -128,8 +118,8 @@ pipeline {
             kubectl apply -f ${K8S_DIR}/frontend-deployment.yaml
             kubectl apply -f ${K8S_DIR}/frontend-service.yaml
 
-            kubectl set image deployment/a1-backend a1-backend=$DOCKER_USERNAME/${BACKEND_IMAGE}
-            kubectl set image deployment/a1-frontend a1-frontend=$DOCKER_USERNAME/${FRONTEND_IMAGE}
+            kubectl set image deployment/a1-backend a1-backend=\$DOCKER_USERNAME/${env.BACKEND_IMAGE}
+            kubectl set image deployment/a1-frontend a1-frontend=\$DOCKER_USERNAME/${env.FRONTEND_IMAGE}
 
             kubectl rollout status deployment/a1-backend
             kubectl rollout status deployment/a1-frontend

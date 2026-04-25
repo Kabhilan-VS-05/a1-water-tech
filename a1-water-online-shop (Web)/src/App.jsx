@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom'
 import Header from './components/Header.jsx'
 import Footer from './components/Footer.jsx'
 import ToastStack from './components/ToastStack.jsx'
+import ScrollToTop from './components/ScrollToTop.jsx'
 import Home from './pages/Home.jsx'
 import Shop from './pages/Shop.jsx'
 import ProductDetail from './pages/ProductDetail.jsx'
@@ -25,6 +26,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col font-sans bg-slate-50 text-slate-900">
       <Header />
+      <ScrollToTop />
       <ToastStack />
       <main className="flex-1">
         <Routes>

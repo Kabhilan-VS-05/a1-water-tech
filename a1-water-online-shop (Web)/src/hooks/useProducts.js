@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 export default function useProducts() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -24,8 +25,9 @@ export default function useProducts() {
           setItems(Array.isArray(data.items) ? data.items : [])
           setLoading(false)
         }
-      } catch {
+      } catch (err) {
         if (active) {
+          setError(err.message)
           setItems([])
           setLoading(false)
         }
@@ -39,5 +41,5 @@ export default function useProducts() {
     }
   }, [])
 
-  return { items, loading }
+  return { items, loading, error }
 }

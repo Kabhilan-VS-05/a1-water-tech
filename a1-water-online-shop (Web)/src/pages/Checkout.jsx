@@ -171,6 +171,21 @@ export default function Checkout() {
         throw new Error(`Order request failed: ${orderResponse.status}`)
       }
 
+      // Save order details for confirmation page
+      sessionStorage.setItem('lastOrder', JSON.stringify({
+        id,
+        items: items.map((item) => ({
+          name: item.name,
+          qty: item.qty,
+          price: item.price,
+          imageUrl: item.imageUrl || '',
+        })),
+        address: addressSnapshot,
+        total: totalAmount,
+        subtotal,
+        gstAmount,
+      }))
+
       clearCart()
       navigate(`/order-confirmation/${id}`)
     } catch (err) {

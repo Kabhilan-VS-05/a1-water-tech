@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
 import PageHeader from '../components/PageHeader.jsx'
-import { Check, Calendar, ArrowRight, Shield } from 'lucide-react'
+import { Check, Calendar, ArrowRight, Shield, AlertCircle } from 'lucide-react'
 import { formatCurrency } from '../utils/format.js'
 import useServices from '../hooks/useServices.js'
 
 export default function Services() {
-  const { items: servicePlans } = useServices()
+  const { items: servicePlans, loading, error } = useServices()
 
   return (
     <div className="container mx-auto px-4 py-12 max-w-7xl font-sans text-slate-900">
@@ -15,7 +15,19 @@ export default function Services() {
         subtitle="Lead customers with installation, repair, maintenance, and water-test bookings first, then guide product buying only when required."
       />
 
-      {servicePlans.length > 0 ? (
+      {loading ? (
+        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8 animate-pulse">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-96 bg-slate-200 rounded-3xl"></div>
+          ))}
+        </div>
+      ) : error ? (
+        <div className="mt-12 rounded-3xl border border-red-200 bg-red-50 px-6 py-12 text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h3 className="text-lg font-bold text-red-900 mb-2">Failed to load services</h3>
+          <p className="text-red-700">{error}</p>
+        </div>
+      ) : servicePlans.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
           {servicePlans.map((plan) => (
             <div
@@ -89,7 +101,7 @@ export default function Services() {
         </div>
       ) : (
         <div className="mt-12 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-slate-500">
-          No service plans available. Add them in Firebase to display them here.
+          No service plans available. Please add services in the admin panel.
         </div>
       )}
 

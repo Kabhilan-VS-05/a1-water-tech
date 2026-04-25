@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Filter, SlidersHorizontal, Search } from 'lucide-react'
+import { Filter, SlidersHorizontal, Search, AlertCircle } from 'lucide-react'
 import ProductCard from '../components/ProductCard.jsx'
 import useProducts from '../hooks/useProducts.js'
 
@@ -18,7 +18,7 @@ export default function Shop() {
   const [category, setCategory] = useState('All')
   const [priceRange, setPriceRange] = useState('all')
   const [minRating, setMinRating] = useState('0')
-  const { items: products, loading } = useProducts()
+  const { items: products, loading, error } = useProducts()
   const [showFilters, setShowFilters] = useState(false)
   const categories = useMemo(
     () => [
@@ -151,7 +151,13 @@ export default function Shop() {
 
         {/* Product Grid */}
         <div className="flex-1">
-          {loading ? (
+          {error ? (
+            <div className="bg-red-50 rounded-2xl p-12 text-center border border-red-200">
+              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+              <h3 className="text-lg font-bold text-red-900 mb-2">Failed to load products</h3>
+              <p className="text-red-700 max-w-md mx-auto">{error}</p>
+            </div>
+          ) : loading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
               {[1, 2, 3, 4, 5, 6].map(i => (
                 <div key={i} className="aspect-[3/4] bg-slate-200 rounded-2xl"></div>

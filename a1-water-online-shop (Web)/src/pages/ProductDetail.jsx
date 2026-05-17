@@ -5,22 +5,25 @@ import { useCart } from '../state/CartContext.jsx'
 import { useToast } from '../state/ToastContext.jsx'
 import { formatCurrency } from '../utils/format.js'
 import { useState } from 'react'
+import { getProductImage, handleImageError } from '../utils/imageUtils.js'
 
 export default function ProductDetail() {
   const { id } = useParams()
   const { addItem } = useCart()
   const { showToast } = useToast()
   const { items: products } = useProducts()
-  const product = products.find((entry) => entry.id === id)
+  const product = products.find(p => p.id === id)
   const [adding, setAdding] = useState(false)
 
   if (!product) {
     return (
-      <div className="container mx-auto px-4 py-20 text-center">
-        <h2 className="text-2xl font-bold text-slate-900 mb-4">Product Not Found</h2>
-        <Link to="/shop" className="text-indigo-600 hover:text-indigo-700 font-semibold flex items-center justify-center gap-2">
-          <ArrowLeft className="w-4 h-4" /> Back to Shop
-        </Link>
+      <div className="page-bg">
+        <div className="container mx-auto px-4 py-20 text-center">
+          <h2 className="text-xl font-bold text-slate-800 mb-3">Product Not Found</h2>
+          <Link to="/shop" className="btn-secondary text-sm inline-flex items-center gap-2">
+            <ArrowLeft className="w-4 h-4" /> Back to Shop
+          </Link>
+        </div>
       </div>
     )
   }
@@ -30,133 +33,147 @@ export default function ProductDetail() {
     try {
       await addItem(product.id)
       showToast(`${product.name} added to cart`)
-      setTimeout(() => setAdding(false), 800)
+      setTimeout(() => setAdding(false), 1000)
     } catch {
-      showToast('Unable to add this item right now. Please try again.', 'error')
+      showToast('Unable to add item. Please try again.', 'error')
       setAdding(false)
     }
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl font-sans">
-      <div className="flex items-center gap-2 text-sm text-slate-500 mb-8">
-        <Link to="/shop" className="hover:text-indigo-600 transition-colors">Shop</Link>
-        <span>/</span>
-        <span className="text-slate-900 font-medium truncate">{product.name}</span>
-      </div>
+    <div className="page-bg">
+      <div className="container mx-auto px-4 max-w-6xl py-8">
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-16">
-        {/* Product Image */}
-        <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-sm flex items-center justify-center relative overflow-hidden group">
-          <div className="absolute inset-0 bg-slate-50/50 z-0" />
-          <img
-            src={product.imageUrl || '/sample-product.jpg'}
-            alt={product.name}
-            onError={(event) => {
-              event.currentTarget.onerror = null
-              event.currentTarget.src = '/sample-product.jpg'
-            }}
-            className="w-full max-w-md object-contain relative z-10 transition-transform duration-500 group-hover:scale-105"
-          />
-          {product.tag && (
-            <span className="absolute top-6 left-6 z-20 bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 rounded-full uppercase tracking-wider shadow-lg shadow-indigo-200">
-              {product.tag}
-            </span>
-          )}
+        {/* Breadcrumb */}
+        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-6">
+          <Link to="/shop" className="hover:text-indigo-600 transition-colors font-medium">Shop</Link>
+          <span>/</span>
+          <span className="text-slate-600 font-medium truncate max-w-xs">{product.name}</span>
         </div>
 
-        {/* Product Info */}
-        <div className="flex flex-col">
-          <h1 className="text-3xl lg:text-4xl font-bold text-slate-900 mb-4 leading-tight">{product.name}</h1>
-
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded-md font-bold text-sm">
-              <span>{product.rating}</span>
-              <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
-            </div>
-            <span className="text-slate-400 text-sm border-l border-slate-200 pl-4">{product.category}</span>
-            <span className="text-green-600 text-sm font-medium flex items-center gap-1 border-l border-slate-200 pl-4">
-              <Check className="w-4 h-4" /> In Stock
-            </span>
-          </div>
-
-          <div className="text-4xl font-bold text-slate-900 mb-2">{formatCurrency(product.price)}</div>
-          <p className="text-slate-500 text-sm mb-8">Inclusive of all taxes</p>
-
-          <p className="text-slate-600 leading-relaxed mb-8 text-lg">{product.description}</p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            {product.features.map((feature, i) => (
-              <div key={i} className="flex items-start gap-3">
-                <div className="mt-1 w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 flex-shrink-0">
-                  <Check className="w-3 h-3" />
-                </div>
-                <span className="text-slate-700 font-medium">{feature}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mb-8 border-t border-b border-slate-100 py-6">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="w-6 h-6 text-slate-400" />
-              <div>
-                <p className="text-xs text-slate-500 uppercase font-bold tracking-wide">Warranty</p>
-                <p className="font-semibold text-slate-900">{product.warranty}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Box className="w-6 h-6 text-slate-400" />
-              <div>
-                <p className="text-xs text-slate-500 uppercase font-bold tracking-wide">Suitability</p>
-                <p className="font-semibold text-slate-900">{product.tds}</p>
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={handleAdd}
-            disabled={adding}
-            className={`w-full md:w-auto md:min-w-[200px] py-4 px-8 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all transform active:scale-95 ${adding
-                ? 'bg-green-600 text-white cursor-default shadow-lg shadow-green-200'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-200 hover:shadow-indigo-300'
-              }`}
-          >
-            {adding ? (
-              <>
-                <Check className="w-6 h-6" /> Added to Cart
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="w-6 h-6" /> Add to Cart
-              </>
+        {/* Main product section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+          {/* Image */}
+          <div className="card p-6 flex items-center justify-center bg-white min-h-[320px] relative overflow-hidden">
+            <img
+              src={getProductImage(product)}
+              alt={product.name}
+              onError={e => handleImageError(e, 'product')}
+              className="max-w-full max-h-72 object-contain"
+            />
+            {product.tag && (
+              <span className="absolute top-4 left-4 badge badge-primary text-xs">
+                {product.tag}
+              </span>
             )}
-          </button>
-        </div>
-      </div>
+          </div>
 
-      {/* Additional Info / Tabs placeholder */}
-      <div className="bg-slate-50 rounded-3xl p-8 lg:p-12">
-        <h3 className="text-2xl font-bold text-slate-900 mb-6">Why choose this product?</h3>
-        <p className="text-slate-600 max-w-3xl mb-8">{product.recommendation}</p>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          <div className="bg-white p-6 rounded-2xl shadow-sm">
-            <Truck className="w-8 h-8 text-indigo-600 mb-4" />
-            <h4 className="font-bold text-slate-900 mb-2">Free Delivery</h4>
-            <p className="text-sm text-slate-500">We ship across Tamil Nadu with no extra cost.</p>
-          </div>
-          <div className="bg-white p-6 rounded-2xl shadow-sm">
-            <ShieldCheck className="w-8 h-8 text-indigo-600 mb-4" />
-            <h4 className="font-bold text-slate-900 mb-2">Extended Warranty</h4>
-            <p className="text-sm text-slate-500">Upgrade your warranty with our Care Plans.</p>
-          </div>
-          <div className="bg-white p-6 rounded-2xl shadow-sm">
-            <Box className="w-8 h-8 text-indigo-600 mb-4" />
-            <h4 className="font-bold text-slate-900 mb-2">Easy Returns</h4>
-            <p className="text-sm text-slate-500">7-day replacement for manufacturing defects.</p>
+          {/* Info */}
+          <div className="flex flex-col gap-5">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-900 mb-2 leading-snug">{product.name}</h1>
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                {product.category && (
+                  <span className="badge badge-neutral">{product.category}</span>
+                )}
+                <span className="badge badge-success flex items-center gap-1">
+                  <Check className="w-3 h-3" /> In Stock
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <div className="text-3xl font-bold text-slate-900">{formatCurrency(product.price)}</div>
+              <div className="text-xs text-slate-400 mt-1">Inclusive of all applicable taxes</div>
+            </div>
+
+            {product.description && (
+              <p className="text-sm text-slate-600 leading-relaxed">{product.description}</p>
+            )}
+
+            {product.features?.length > 0 && (
+              <div className="space-y-2">
+                {product.features.map((f, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm text-slate-700">
+                    <div className="w-4 h-4 bg-indigo-50 rounded-full flex items-center justify-center flex-shrink-0">
+                      <Check className="w-2.5 h-2.5 text-indigo-600" />
+                    </div>
+                    {f}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Specs strip */}
+            {(product.warranty || product.tds) && (
+              <div className="grid grid-cols-2 gap-3 py-4 border-t border-b border-slate-100">
+                {product.warranty && (
+                  <div className="flex items-center gap-2.5">
+                    <ShieldCheck className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                    <div>
+                      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Warranty</div>
+                      <div className="text-sm font-semibold text-slate-800">{product.warranty}</div>
+                    </div>
+                  </div>
+                )}
+                {product.tds && (
+                  <div className="flex items-center gap-2.5">
+                    <Box className="w-5 h-5 text-slate-400 flex-shrink-0" />
+                    <div>
+                      <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">Suitability</div>
+                      <div className="text-sm font-semibold text-slate-800">{product.tds}</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={handleAdd}
+              disabled={adding}
+              className={`btn-primary py-3 px-8 text-sm justify-center w-full sm:w-auto ${
+                adding ? 'bg-emerald-500 cursor-default' : ''
+              }`}
+            >
+              {adding ? (
+                <><Check className="w-4 h-4" /> Added to Cart</>
+              ) : (
+                <><ShoppingCart className="w-4 h-4" /> Add to Cart</>
+              )}
+            </button>
           </div>
         </div>
-      </div>
 
+        {/* Why choose */}
+        {product.recommendation && (
+          <div className="card p-6 mb-6">
+            <h3 className="text-base font-bold text-slate-900 mb-2">Why this product?</h3>
+            <p className="text-sm text-slate-600 leading-relaxed">{product.recommendation}</p>
+          </div>
+        )}
+
+        {/* Benefits */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          {[
+            { icon: Truck, title: 'Free Delivery', desc: 'Shipped across Tamil Nadu at no extra cost.' },
+            { icon: ShieldCheck, title: 'Extended Warranty', desc: 'Upgrade your warranty with our Care Plans.' },
+            { icon: Box, title: 'Easy Returns', desc: '7-day replacement for manufacturing defects.' },
+          ].map(b => (
+            <div key={b.title} className="card p-4 flex items-start gap-3">
+              <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                <b.icon className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-slate-800">{b.title}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{b.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+
+
+      </div>
     </div>
   )
 }

@@ -4,6 +4,8 @@ import {
   signInWithCognito,
   signOutFromCognito,
   signUpWithCognito,
+  forgotPassword as forgotPasswordCognito,
+  confirmPassword as confirmPasswordCognito,
 } from '../cognito.js'
 
 const AuthContext = createContext(null)
@@ -47,8 +49,16 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  const forgotPassword = async (email) => {
+    return forgotPasswordCognito(email)
+  }
+
+  const confirmPassword = async (email, code, newPassword) => {
+    return confirmPasswordCognito(email, code, newPassword)
+  }
+
   const value = useMemo(
-    () => ({ user, loading, signIn, signUp, signOut }),
+    () => ({ user, loading, signIn, signUp, signOut, forgotPassword, confirmPassword }),
     [user, loading],
   )
 

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Search, ShoppingCart, User, Menu, X, Phone, Truck, Calendar, MapPin, Sparkles } from 'lucide-react'
+import { Search, ShoppingCart, User, Menu, X, Phone, MapPin, Calendar, Truck } from 'lucide-react'
 import { useCart } from '../state/CartContext.jsx'
 import { useAuth } from '../state/AuthContext.jsx'
 import { useSiteSettings } from '../state/SiteSettingsContext.jsx'
@@ -23,6 +23,7 @@ export default function Header() {
     e.preventDefault()
     if (searchQuery.trim()) {
       navigate(`/shop?q=${encodeURIComponent(searchQuery)}`)
+      setIsMenuOpen(false)
     }
   }
 
@@ -30,204 +31,150 @@ export default function Header() {
     { name: 'Home', path: '/' },
     { name: 'Book Service', path: '/bookings' },
     { name: 'Care Plans', path: '/services' },
-    { name: 'Shop All', path: '/shop' },
-    { name: 'Purifiers', path: '/shop?category=Purifiers' },
+    { name: 'Shop', path: '/shop' },
+    { name: 'Contact', path: '/contact' },
   ]
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white shadow-sm border-b border-gray-100 font-sans">
-      {/* Top Utility Bar */}
-      <div className="bg-slate-900 text-white text-[11px] py-1.5 px-4 hidden md:block">
-        <div className="container mx-auto flex justify-between items-center max-w-7xl">
-          <div className="flex gap-4">
-            <span className="flex items-center gap-1 opacity-90 hover:opacity-100 transition"><Phone className="w-3 h-3" /> {settings.phonePrimary}</span>
-            <span className="flex items-center gap-1 opacity-90 hover:opacity-100 transition"><MapPin className="w-3 h-3" /> {settings.locality}</span>
+    <header className="sticky top-0 z-50 bg-white border-b border-slate-100" style={{ boxShadow: '0 1px 4px 0 rgb(0 0 0 / 0.06)' }}>
+      {/* Top bar */}
+      <div className="hidden md:block bg-slate-900 text-slate-300 text-xs py-2 px-4">
+        <div className="container mx-auto max-w-7xl flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <span className="flex items-center gap-1.5">
+              <Phone className="w-3 h-3 text-indigo-400" />
+              {settings.phonePrimary}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <MapPin className="w-3 h-3 text-indigo-400" />
+              {settings.locality}
+            </span>
           </div>
-          <div className="flex gap-4">
-            <Link to="/services" className="hover:text-indigo-200 transition">Care Plans</Link>
-            <Link to="/track" className="hover:text-indigo-200 transition">Track Order</Link>
-            <Link to="/orders" className="hover:text-indigo-200 transition">My Orders</Link>
-            <Link to={user ? "/profile" : "/login"} className="hover:text-indigo-200 transition">My Account</Link>
+          <div className="flex items-center gap-5">
+            <Link to="/track" className="hover:text-white transition-colors">Track Order</Link>
+            <Link to="/orders" className="hover:text-white transition-colors">My Orders</Link>
+            {user
+              ? <Link to="/profile" className="hover:text-white transition-colors">My Account</Link>
+              : <Link to="/login" className="hover:text-white transition-colors">Sign In</Link>
+            }
           </div>
         </div>
       </div>
 
-      {/* Main Header Row */}
-      <div className="container mx-auto px-4 py-3 md:py-4 max-w-7xl">
-        <div className="flex items-center justify-between gap-4 md:gap-8">
+      {/* Main header */}
+      <div className="container mx-auto px-4 max-w-7xl">
+        <div className="flex items-center gap-6 h-16">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 flex-shrink-0 group">
-            <img src={brandImage} alt={settings.name} className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border border-slate-200 group-hover:scale-105 transition-transform" />
-            <div className="flex flex-col">
-              <span className="text-xl md:text-2xl font-bold text-indigo-950 tracking-tight leading-none">{settings.name}</span>
-              <span className="text-[10px] md:text-xs text-slate-500 font-medium tracking-wide">Pure Water, Smart Service</span>
+          <Link to="/" className="flex items-center gap-2.5 flex-shrink-0">
+            <img src={brandImage} alt={settings.name} className="w-9 h-9 rounded-lg object-cover" />
+            <div>
+              <div className="text-base font-bold text-slate-900 leading-none">{settings.name}</div>
+              <div className="text-[10px] font-semibold text-indigo-600 uppercase tracking-wide">Water Solutions</div>
             </div>
           </Link>
 
-          {/* Search Bar - Desktop */}
-          <div className="hidden md:flex flex-1 max-w-2xl px-4">
-            <form onSubmit={handleSearch} className="relative w-full group">
+          {/* Nav links — desktop */}
+          <nav className="hidden lg:flex items-center gap-1 ml-4">
+            {navLinks.map(link => (
+              <NavLink
+                key={link.path}
+                to={link.path}
+                className={({ isActive }) =>
+                  `px-3.5 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-indigo-50 text-indigo-600'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`
+                }
+              >
+                {link.name}
+              </NavLink>
+            ))}
+          </nav>
+
+          {/* Search */}
+          <form onSubmit={handleSearch} className="hidden lg:flex flex-1 max-w-sm ml-auto">
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search for purifiers, filters, or services..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-full py-2.5 pl-5 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400 text-slate-700"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search products or services..."
+                className="input pl-9 py-2 text-sm"
               />
-              <button type="submit" className="absolute right-1.5 top-1.5 p-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full transition-colors cursor-pointer">
-                <Search className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
+            </div>
+          </form>
 
           {/* Actions */}
-          <div className="flex items-center gap-3 md:gap-6">
-            <Link to="/bookings" className="hidden lg:flex items-center gap-3 rounded-full border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-indigo-700 shadow-sm shadow-indigo-100 transition-all hover:-translate-y-0.5 hover:bg-indigo-100">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-indigo-600">
-                <Calendar className="w-4 h-4" />
-              </div>
-              <div className="flex flex-col leading-none">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-500">Primary Action</span>
-                <span className="text-sm font-bold">Book Service Visit</span>
-              </div>
+          <div className="flex items-center gap-2 ml-auto lg:ml-0">
+            <Link
+              to="/bookings"
+              className="hidden md:flex btn-primary text-sm px-4 py-2"
+            >
+              <Calendar className="w-4 h-4" />
+              Book Service
             </Link>
 
-            <Link to={user ? "/profile" : "/login"} className="hidden md:flex items-center gap-2 group text-slate-700 hover:text-indigo-600 transition-colors">
-              <div className="p-2 bg-slate-50 rounded-full group-hover:bg-indigo-50 transition-colors">
-                <User className="w-5 h-5" />
-              </div>
-              <div className="flex flex-col leading-none">
-                <span className="text-[10px] text-slate-500">Hello, {user ? (user.displayName || 'User') : 'Sign In'}</span>
-                <span className="text-sm font-semibold">Account</span>
-              </div>
-            </Link>
-
-            <Link to="/cart" className="relative p-2 text-slate-700 hover:text-indigo-600 transition-colors group">
-              <div className="p-2 bg-slate-50 rounded-full group-hover:bg-indigo-50 transition-colors">
-                <ShoppingCart className="w-5 h-5" />
-              </div>
+            <Link to="/cart" className="relative p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-600">
+              <ShoppingCart className="w-5 h-5" />
               {cartCount > 0 && (
-                <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white shadow-sm">
+                <span className="absolute -top-0.5 -right-0.5 bg-indigo-600 text-white text-[10px] font-bold w-4.5 h-4.5 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full border border-white">
                   {cartCount}
                 </span>
               )}
             </Link>
 
-            {/* Mobile Menu Toggle */}
+            <Link to={user ? '/profile' : '/login'} className="hidden md:flex p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-600">
+              <User className="w-5 h-5" />
+            </Link>
+
             <button
-              className="md:hidden p-2 text-slate-700"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="lg:hidden p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-600"
             >
-              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
-
-        {/* Mobile Search Bar */}
-        <div className="mt-3 md:hidden">
-          <form onSubmit={handleSearch} className="relative w-full">
-            <input
-              type="text"
-              placeholder="Search products..."
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-2.5 pl-4 pr-10 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <button type="submit" className="absolute right-3 top-2.5 text-slate-400">
-              <Search className="w-4 h-4" />
-            </button>
-          </form>
-        </div>
       </div>
 
-      {/* Navigation Bar (Desktop) */}
-      <div className="hidden md:block border-t border-slate-100 bg-white">
-        <div className="container mx-auto px-4 max-w-7xl">
-          <nav className="flex items-center gap-8 overflow-x-auto no-scrollbar">
-            {navLinks.map((link) => (
-              <NavLink
-                key={link.path}
-                to={link.path}
-                className={({ isActive }) =>
-                  `text-sm font-medium py-3 border-b-2 transition-colors whitespace-nowrap ${isActive
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-slate-600 hover:text-indigo-600 hover:border-indigo-100'
-                  }`
-                }
-              >
-                {link.name}
-              </NavLink>
-            ))}
-            <div className="flex-1" />
-            <Link to="/track" className="text-sm font-medium text-slate-500 hover:text-indigo-600 py-3 transition-colors flex items-center gap-1">
-              <Truck className="w-4 h-4" /> Track Order
-            </Link>
-            <Link to="/orders" className="text-sm font-medium text-slate-500 hover:text-indigo-600 py-3 transition-colors">
-              My Orders
-            </Link>
-          </nav>
-        </div>
-      </div>
-
-      {/* Mobile Menu Dropdown */}
+      {/* Mobile menu */}
       {isMenuOpen && (
-        <div className="md:hidden border-t border-slate-100 bg-white absolute w-full shadow-lg h-[calc(100vh-80px)] overflow-y-auto z-40">
-          <div className="p-4 flex flex-col gap-2">
-            {navLinks.map((link) => (
+        <div className="lg:hidden border-t border-slate-100 bg-white">
+          <div className="container mx-auto px-4 py-3 space-y-1">
+            <form onSubmit={handleSearch} className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search..."
+                className="input pl-9 py-2"
+              />
+            </form>
+            {navLinks.map(link => (
               <NavLink
                 key={link.path}
                 to={link.path}
                 onClick={() => setIsMenuOpen(false)}
                 className={({ isActive }) =>
-                  `flex items-center justify-between p-3 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
+                  `block px-3 py-2.5 rounded-lg text-sm font-medium ${
+                    isActive ? 'bg-indigo-50 text-indigo-600' : 'text-slate-700 hover:bg-slate-50'
                   }`
                 }
               >
                 {link.name}
               </NavLink>
             ))}
-            <div className="border-t border-slate-100 my-2 pt-2 flex flex-col gap-1">
-              <Link
-                to="/profile"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-3 p-3 text-slate-700 hover:bg-slate-50 rounded-lg"
-              >
-                <User className="w-5 h-5 text-slate-400" />
-                <span className="text-sm font-medium">My Account</span>
+            <div className="pt-2 border-t border-slate-50">
+              <Link to="/orders" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 rounded-lg">
+                <Truck className="w-4 h-4" /> My Orders
               </Link>
-              <Link
-                to="/orders"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-3 p-3 text-slate-700 hover:bg-slate-50 rounded-lg"
-              >
-                <Truck className="w-5 h-5 text-slate-400" />
-                <span className="text-sm font-medium">My Orders</span>
-              </Link>
-              <Link
-                to="/bookings"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-3 rounded-lg bg-indigo-50 p-3 text-indigo-700"
-              >
-                <Calendar className="w-5 h-5 text-indigo-500" />
-                <span className="text-sm font-semibold">Book Service</span>
-              </Link>
-              <Link
-                to="/services"
-                onClick={() => setIsMenuOpen(false)}
-                className="flex items-center gap-3 p-3 text-slate-700 hover:bg-slate-50 rounded-lg"
-              >
-                <Sparkles className="w-5 h-5 text-slate-400" />
-                <span className="text-sm font-medium">Care Plans</span>
+              <Link to={user ? '/profile' : '/login'} onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 rounded-lg">
+                <User className="w-4 h-4" /> {user ? 'My Account' : 'Sign In'}
               </Link>
             </div>
-            {!user && (
-              <div className="mt-4 p-4 bg-slate-50 rounded-xl text-center">
-                <p className="text-sm text-slate-600 mb-3">Sign in for exclusive offers & history</p>
-                <Link to="/login" onClick={() => setIsMenuOpen(false)} className="block w-full py-2.5 bg-indigo-600 text-white rounded-full text-sm font-semibold shadow-sm shadow-indigo-200">
-                  Login / Sign Up
-                </Link>
-              </div>
-            )}
           </div>
         </div>
       )}

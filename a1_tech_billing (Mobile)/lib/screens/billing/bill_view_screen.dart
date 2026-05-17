@@ -1,0 +1,679 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../../theme/app_theme.dart';
+import 'package:printing/printing.dart';
+import '../../models/models.dart';
+import '../../services/database_service.dart';
+import '../../services/sync_service.dart';
+import '../../models/sync_result.dart';
+import '../../services/pdf_service.dart';
+import 'dialogs.dart';
+
+class BillViewScreen extends StatefulWidget {
+  final String billId;
+  final bool isEditable;
+
+  const BillViewScreen({
+    super.key,
+    required this.billId,
+    this.isEditable = false,
+  });
+
+  @override
+  State<BillViewScreen> createState() => _BillViewScreenState();
+}
+
+class _BillViewScreenState extends State<BillViewScreen> {
+  final DatabaseService _db = DatabaseService();
+  final SyncService _sync = SyncService();
+  Bill? _bill;
+  Customer? _customer;
+  bool _isLoading = true;
+  bool _isEditing = false;
+
+  final _customerNameController = TextEditingController();
+  final _customerPhoneController = TextEditingController();
+  final _customerAddressController = TextEditingController();
+  String _selectedPaymentMode = 'pending';
+  List<BillItem> _editableItems = [];
+  double _subtotal = 0;
+  double _gstAmount = 0;
+  double _total = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBill();
+  }
+
+  Future<void> _loadBill() async {
+    final bills = await _db.getBills();
+    final bill = bills.firstWhere((b) => b.id == widget.billId);
+
+    Customer? customer;
+    if (bill.customerId != null) {
+      customer = await _db.getCustomerById(bill.customerId!);
+    }
+
+    setState(() {
+      _bill = bill;
+      _customer = customer;
+      _isLoading = false;
+
+      // Initialize controllers
+      _customerNameController.text = bill.customerName;
+      _customerPhoneController.text = bill.customerPhone ?? '';
+      _customerAddressController.text = bill.customerAddress ?? '';
+      _selectedPaymentMode = bill.paymentMode;
+      _editableItems = List.from(bill.items);
+      _calculateTotals();
+    });
+  }
+
+  void _calculateTotals() {
+    double sub = 0;
+    double gst = 0;
+    for (var item in _editableItems) {
+      sub += item.price * item.quantity;
+      gst += item.gstAmount;
+    }
+    setState(() {
+      _subtotal = sub;
+      _gstAmount = gst;
+      _total = sub + gst;
+    });
+  }
+
+  void _updateItemQuantity(int index, int delta) {
+    setState(() {
+      final item = _editableItems[index];
+      final newQty = item.quantity + delta;
+      if (newQty > 0) {
+        final itemTotal = item.price * newQty;
+        final itemGst = itemTotal * (item.gstPercent / 100);
+        _editableItems[index] = item.copyWith(
+          quantity: newQty,
+          gstAmount: itemGst,
+          total: itemTotal + itemGst,
+        );
+        _calculateTotals();
+      }
+    });
+  }
+
+  void _removeItem(int index) {
+    setState(() {
+      _editableItems.removeAt(index);
+      _calculateTotals();
+    });
+  }
+
+  Future<void> _addItem() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => const AddItemDialog(),
+    );
+
+    if (result != null) {
+      final CatalogItem catalogItem = result['item'];
+      final int quantity = result['quantity'];
+
+      final itemTotal = catalogItem.price * quantity;
+      final itemGst = itemTotal * (catalogItem.gstPercent / 100);
+
+      setState(() {
+        _editableItems.add(
+          BillItem(
+            itemId: catalogItem.id,
+            name: catalogItem.name,
+            type: catalogItem.type,
+            price: catalogItem.price,
+            quantity: quantity,
+            gstPercent: catalogItem.gstPercent,
+            gstAmount: itemGst,
+            total: itemTotal + itemGst,
+            imageUrl: catalogItem.imageUrl,
+          ),
+        );
+        _calculateTotals();
+      });
+    }
+  }
+
+  Future<void> _generatePdf() async {
+    if (_bill == null) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final pdfFile = await PdfService.generateInvoice(
+        _bill!,
+        customer: _customer,
+      );
+
+      // Show PDF
+      await Printing.layoutPdf(
+        name: 'Invoice_${_bill!.billNumber}',
+        onLayout: (format) => pdfFile,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error generating PDF: $e')));
+      }
+    }
+
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _saveChanges() async {
+    if (_bill == null || !widget.isEditable) return;
+
+    final updatedBill = _bill!.copyWith(
+      customerName: _customerNameController.text,
+      customerPhone: _customerPhoneController.text.isEmpty
+          ? null
+          : _customerPhoneController.text,
+      customerAddress: _customerAddressController.text.isEmpty
+          ? null
+          : _customerAddressController.text,
+      items: _editableItems,
+      subtotal: _subtotal,
+      gstAmount: _gstAmount,
+      total: _total,
+      paymentMode: _selectedPaymentMode,
+      updatedAt: DateTime.now(),
+    );
+
+    await _db.updateBill(updatedBill);
+
+    // Update customer if exists
+    if (_customer != null) {
+      final updatedCustomer = _customer!.copyWith(
+        name: _customerNameController.text,
+        phone: _customerPhoneController.text.isEmpty
+            ? null
+            : _customerPhoneController.text,
+        address: _customerAddressController.text.isEmpty
+            ? null
+            : _customerAddressController.text,
+      );
+      await _db.updateCustomer(updatedCustomer);
+    }
+
+    await _loadBill();
+
+    // Auto-sync to AWS if online
+    final syncResult = await _sync.syncOnSave();
+
+    setState(() => _isEditing = false);
+
+    if (mounted) {
+      String message = 'Bill updated successfully';
+
+      switch (syncResult) {
+        case SyncResult.success:
+          message += ' & synced to AWS';
+          break;
+        case SyncResult.offline:
+          message += ' (offline - will sync later)';
+          break;
+        case SyncResult.alreadySyncing:
+          message += ' (sync in progress)';
+          break;
+        case SyncResult.failed:
+          message += ' (sync failed)';
+          break;
+        default:
+          break;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  Future<void> _deleteBill() async {
+    if (_bill == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Bill'),
+        content: Text(
+          'Are you sure you want to delete bill #${_bill!.billNumber}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _db.deleteBill(_bill!.id);
+
+      // Auto-sync to AWS if online
+      await _sync.syncOnSave();
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bill #${_bill!.billNumber} deleted & synced to AWS'),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_bill == null) {
+      return const Scaffold(body: Center(child: Text('Bill not found')));
+    }
+
+    final primaryColor = const Color(0xFF4F46E5);
+    final surfaceColor = const Color(0xFFF8FAFC);
+
+    return Scaffold(
+      backgroundColor: surfaceColor,
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Bill #${_bill!.billNumber}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text(DateFormat('dd MMM yyyy, hh:mm a').format(_bill!.createdAt), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal, color: Colors.white70)),
+          ],
+        ),
+        backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          if (widget.isEditable && !_isEditing)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => setState(() => _isEditing = true),
+              tooltip: 'Edit Bill',
+            ),
+          if (_isEditing)
+            IconButton(icon: const Icon(Icons.check_circle_outline), onPressed: _saveChanges, tooltip: 'Save Changes'),
+          if (_isEditing)
+            IconButton(
+              icon: const Icon(Icons.cancel_outlined),
+              onPressed: () => setState(() => _isEditing = false),
+              tooltip: 'Cancel',
+            ),
+          if (widget.isEditable)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _deleteBill,
+              color: Colors.redAccent,
+              tooltip: 'Delete Bill',
+            ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Status & Payment Summary Card
+                  _buildSectionCard(
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildBadge(
+                              _bill!.status.toUpperCase(),
+                              _getBillStatusColor(),
+                            ),
+                            _buildBadge(
+                              _bill!.paymentMode.toUpperCase(),
+                              primaryColor,
+                              isOutline: true,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _buildStatItem('Items', '${_bill!.items.length}'),
+                            _buildStatItem('Subtotal', '₹${_bill!.subtotal.toStringAsFixed(0)}'),
+                            _buildStatItem('Tax', '₹${_bill!.gstAmount.toStringAsFixed(0)}'),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Customer Details Section
+                  _buildSectionHeader('Customer Details', Icons.person_outline),
+                  _buildSectionCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _isEditing
+                            ? _buildTextField(_customerNameController, label: 'Full Name')
+                            : _buildInfoDetail('Name', _bill!.customerName, Icons.person),
+                        const SizedBox(height: 12),
+                        _isEditing
+                            ? _buildTextField(_customerPhoneController, label: 'Phone Number', keyboardType: TextInputType.phone)
+                            : _buildInfoDetail('Phone', _bill!.customerPhone ?? 'Not Provided', Icons.phone),
+                        const SizedBox(height: 12),
+                        _isEditing
+                            ? _buildTextField(_customerAddressController, label: 'Address', maxLines: 3)
+                            : _buildInfoDetail('Address', _bill!.customerAddress ?? 'Not Provided', Icons.location_on),
+                        if (_customer != null && !_isEditing) ...[
+                          const Divider(height: 32),
+                          Row(
+                            children: [
+                              Icon(Icons.history, size: 16, color: AppTheme.slate.shade400),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Previous Visits: ${_customer!.totalVisits} | Total Spent: ₹${_customer!.totalSpent.toStringAsFixed(0)}',
+                                style: TextStyle(color: AppTheme.slate.shade500, fontSize: 12, fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Items List Section
+                  _buildSectionHeader('Bill Items', Icons.receipt_long_outlined),
+                  ...(_isEditing ? _editableItems : _bill!.items).asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    return _buildItemTile(item, index);
+                  }),
+                  
+                  if (_isEditing)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: OutlinedButton.icon(
+                        onPressed: _addItem,
+                        icon: const Icon(Icons.add_circle_outline),
+                        label: const Text('Add Item to Bill'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: primaryColor,
+                          side: BorderSide(color: primaryColor.withOpacity(0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                        ),
+                      ),
+                    ),
+                  
+                  const SizedBox(height: 100), // Space for fab
+                ],
+              ),
+            ),
+          ),
+          
+          // Bottom Summary Bar
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5)),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Total Amount', style: TextStyle(color: AppTheme.slate, fontSize: 12, fontWeight: FontWeight.w500)),
+                      Text(
+                        '₹${(_isEditing ? _total : _bill!.total).toStringAsFixed(0)}',
+                        style: TextStyle(color: primaryColor, fontSize: 24, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: _generatePdf,
+                    icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
+                    label: const Text('GENERATE PDF', style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.1)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      elevation: 4,
+                      shadowColor: primaryColor.withOpacity(0.4),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppTheme.slate.shade600),
+          const SizedBox(width: 8),
+          Text(
+            title.toUpperCase(),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: AppTheme.slate.shade600,
+              letterSpacing: 1.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+        border: Border.all(color: AppTheme.slate.withOpacity(0.1)),
+      ),
+      child: child,
+    );
+  }
+
+  Widget _buildBadge(String text, Color color, {bool isOutline = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: isOutline ? Colors.transparent : color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(30),
+        border: isOutline ? Border.all(color: color.withOpacity(0.5)) : null,
+      ),
+      child: Text(
+        text,
+        style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 0.5),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value) {
+    return Column(
+      children: [
+        Text(label, style: TextStyle(color: AppTheme.slate.shade400, fontSize: 11, fontWeight: FontWeight.w500)),
+        const SizedBox(height: 4),
+        Text(value, style: const TextStyle(color: AppTheme.slate, fontSize: 16, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  Widget _buildInfoDetail(String label, String value, IconData icon) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, size: 16, color: const Color(0xFF64748B)),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: TextStyle(color: AppTheme.slate.shade400, fontSize: 11, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 2),
+              Text(value, style: const TextStyle(color: AppTheme.slate, fontSize: 14, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildItemTile(BillItem item, int index) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.slate.withOpacity(0.05)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFFEEF2FF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text(
+                '${index + 1}',
+                style: const TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.slate)),
+                const SizedBox(height: 2),
+                Text(
+                  '${item.quantity} x ₹${item.price.toStringAsFixed(0)}',
+                  style: TextStyle(color: AppTheme.slate.shade400, fontSize: 12, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          ),
+          if (_isEditing)
+            Row(
+              children: [
+                _buildQtyBtn(Icons.remove, () => _updateItemQuantity(index, -1)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('${item.quantity}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                _buildQtyBtn(Icons.add, () => _updateItemQuantity(index, 1)),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                  onPressed: () => _removeItem(index),
+                ),
+              ],
+            )
+          else
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text('₹${item.total.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF4F46E5))),
+                Text('GST ${item.gstPercent.toStringAsFixed(0)}%', style: TextStyle(color: AppTheme.slate.shade400, fontSize: 10)),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQtyBtn(IconData icon, VoidCallback onPressed) {
+    return GestureDetector(
+      onTap: onPressed,
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: AppTheme.slate.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppTheme.slate.shade200),
+        ),
+        child: Icon(icon, size: 16, color: AppTheme.slate.shade700),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, {required String label, int maxLines = 1, TextInputType? keyboardType}) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: AppTheme.slate.shade500, fontSize: 13),
+        filled: true,
+        fillColor: const Color(0xFFF8FAFC),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppTheme.slate.shade200)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppTheme.slate.shade200)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+    );
+  }
+
+  Color _getBillStatusColor() {
+    if (_bill == null) return Colors.grey;
+    switch (_bill!.status.toLowerCase()) {
+      case 'draft': return Colors.orange;
+      case 'confirmed': return Colors.blue;
+      case 'paid': return Colors.green;
+      case 'cancelled': return Colors.red;
+      default: return Colors.grey;
+    }
+  }
+}

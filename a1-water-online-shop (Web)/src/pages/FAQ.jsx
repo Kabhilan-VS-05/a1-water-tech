@@ -1,11 +1,12 @@
-import { faqs } from '../data/services.js'
+import useFaqs from '../hooks/useFaqs.js'
 import PageHeader from '../components/PageHeader.jsx'
-import { Plus, Minus, Search } from 'lucide-react'
+import { Plus, Minus, Search, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 
 export default function FAQ() {
   const [openIndex, setOpenIndex] = useState(null)
   const [search, setSearch] = useState('')
+  const { items: faqs, loading } = useFaqs()
 
   const filteredFaqs = faqs.filter(f =>
     f.q.toLowerCase().includes(search.toLowerCase()) ||
@@ -32,7 +33,12 @@ export default function FAQ() {
       </div>
 
       <div className="space-y-4">
-        {filteredFaqs.length > 0 ? (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+            <Loader2 className="w-8 h-8 animate-spin mb-4 text-indigo-500" />
+            <p className="text-sm font-medium">Loading answers from server...</p>
+          </div>
+        ) : filteredFaqs.length > 0 ? (
           filteredFaqs.map((item, index) => (
             <div
               key={index}

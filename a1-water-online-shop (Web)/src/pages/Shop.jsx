@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Filter, SlidersHorizontal, Search, AlertCircle } from 'lucide-react'
+import { Search, AlertCircle, SlidersHorizontal, X } from 'lucide-react'
 import ProductCard from '../components/ProductCard.jsx'
 import useProducts from '../hooks/useProducts.js'
 
 const priceOptions = [
-  { label: 'All', value: 'all' },
-  { label: 'Below ₹5,000', value: '0-5000' },
-  { label: '₹5,000 - ₹15,000', value: '5000-15000' },
-  { label: '₹15,000 - ₹30,000', value: '15000-30000' },
+  { label: 'All Prices', value: 'all' },
+  { label: 'Under ₹5,000', value: '0-5000' },
+  { label: '₹5,000 – ₹15,000', value: '5000-15000' },
+  { label: '₹15,000 – ₹30,000', value: '15000-30000' },
   { label: 'Above ₹30,000', value: '30000-999999' },
 ]
 
@@ -17,171 +17,180 @@ export default function Shop() {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('All')
   const [priceRange, setPriceRange] = useState('all')
-  const [minRating, setMinRating] = useState('0')
-  const { items: products, loading, error } = useProducts()
   const [showFilters, setShowFilters] = useState(false)
+  const { items: products, loading, error } = useProducts()
+
   const categories = useMemo(
-    () => [
-      'All',
-      ...new Set(
-        products
-          .map((product) => product.category)
-          .filter(Boolean),
-      ),
-    ],
-    [products],
+    () => ['All', ...new Set(products.map(p => p.category).filter(Boolean))],
+    [products]
   )
 
   useEffect(() => {
-    const categoryParam = searchParams.get('category')
-    const queryParam = searchParams.get('q')
-
-    if (categoryParam && categories.includes(categoryParam)) {
-      setCategory(categoryParam)
-    } else if (!categoryParam) {
-      setCategory('All')
-    }
-
-    setQuery(queryParam || '')
+    const cat = searchParams.get('category')
+    const q   = searchParams.get('q')
+    if (cat && categories.includes(cat)) setCategory(cat)
+    else if (!cat) setCategory('All')
+    setQuery(q || '')
   }, [searchParams, categories])
 
   const filtered = useMemo(() => {
-    const [minPrice, maxPrice] =
-      priceRange === 'all' ? [0, Number.MAX_SAFE_INTEGER] : priceRange.split('-')
-
-    return products.filter((product) => {
-      const matchesQuery = product.name
-        .toLowerCase()
-        .includes(query.trim().toLowerCase())
-      const matchesCategory =
-        category === 'All' || product.category === category
-      const matchesPrice =
-        product.price >= Number(minPrice) && product.price <= Number(maxPrice)
-      const matchesRating = product.rating >= Number(minRating)
-      return matchesQuery && matchesCategory && matchesPrice && matchesRating
+    const [min, max] =
+      priceRange === 'all' ? [0, Number.MAX_SAFE_INTEGER] : priceRange.split('-').map(Number)
+    return products.filter(p => {
+      const matchQ   = p.name.toLowerCase().includes(query.trim().toLowerCase())
+      const matchCat = category === 'All' || p.category === category
+      const matchP   = p.price >= min && p.price <= max
+      return matchQ && matchCat && matchP
     })
-  }, [query, category, priceRange, minRating, products])
+  }, [query, category, priceRange, products])
+
+  const resetFilters = () => { setQuery(''); setCategory('All'); setPriceRange('all') }
+  const hasFilters = query || category !== 'All' || priceRange !== 'all'
 
   return (
-    <div className="container mx-auto px-4 py-8 lg:py-12 max-w-7xl">
-      {/* Page Header */}
-      <div className="mb-8 md:mb-12">
-        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-2">Shop All Products</h1>
-        <p className="text-slate-500 max-w-2xl">Browse our complete range of certified water purifiers, replacement filters, and service plans.</p>
-      </div>
+    <div className="page-bg">
+      <div className="container mx-auto px-4 max-w-7xl py-8">
 
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Mobile Filter Toggle */}
-        <button
-          className="lg:hidden flex items-center gap-2 w-full bg-white p-3 rounded-lg border border-slate-200 shadow-sm font-semibold text-slate-700"
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          <SlidersHorizontal className="w-5 h-5" />
-          {showFilters ? 'Hide Filters' : 'Show Filters'}
-        </button>
+        {/* Page header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-slate-900">Shop</h1>
+          <p className="text-sm text-slate-500 mt-1">Water purifiers, filters, and accessories</p>
+        </div>
 
-        {/* Sidebar Filters */}
-        <aside className={`lg:w-64 flex-shrink-0 space-y-8 ${showFilters ? 'block' : 'hidden lg:block'}`}>
-          {/* Search */}
-          <div className="space-y-3">
-            <label className="text-sm font-bold text-slate-900 uppercase tracking-wide">Search</label>
-            <div className="relative">
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Model or keyword"
-                className="w-full bg-white border border-slate-200 rounded-lg py-2.5 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-            </div>
+        {/* Search + filter row */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search products..."
+              className="input pl-9 py-2.5"
+            />
+            {query && (
+              <button onClick={() => setQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`lg:hidden btn-secondary px-4 py-2.5 gap-2 ${showFilters ? 'border-indigo-600 text-indigo-600 bg-indigo-50' : ''}`}
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            Filters
+            {hasFilters && <span className="w-2 h-2 rounded-full bg-indigo-600 ml-1" />}
+          </button>
+          {hasFilters && (
+            <button onClick={resetFilters} className="text-sm text-slate-500 hover:text-rose-600 transition-colors hidden lg:block">
+              Clear filters
+            </button>
+          )}
+        </div>
 
-          {/* Categories */}
-          <div className="space-y-3">
-            <label className="text-sm font-bold text-slate-900 uppercase tracking-wide">Category</label>
-            <div className="space-y-2">
-              {categories.map((cat) => (
-                <label key={cat} className="flex items-center gap-2 cursor-pointer group">
-                  <input
-                    type="radio"
-                    name="category"
-                    checked={category === cat}
-                    onChange={() => setCategory(cat)}
-                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                  />
-                  <span className={`text-sm group-hover:text-indigo-600 transition-colors ${category === cat ? 'font-semibold text-indigo-700' : 'text-slate-600'}`}>{cat}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Sidebar */}
+          <aside className={`w-full lg:w-56 flex-shrink-0 space-y-6 bg-white lg:bg-transparent p-5 lg:p-0 rounded-2xl border border-slate-100 lg:border-none ${showFilters ? 'block' : 'hidden lg:block'}`}>
 
-          {/* Price */}
-          <div className="space-y-3">
-            <label className="text-sm font-bold text-slate-900 uppercase tracking-wide">Price Range</label>
-            <div className="space-y-2">
-              {priceOptions.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-2 cursor-pointer group">
-                  <input
-                    type="radio"
-                    name="price"
-                    checked={priceRange === opt.value}
-                    onChange={() => setPriceRange(opt.value)}
-                    className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 border-slate-300"
-                  />
-                  <span className={`text-sm group-hover:text-indigo-600 transition-colors ${priceRange === opt.value ? 'font-semibold text-indigo-700' : 'text-slate-600'}`}>{opt.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
+            {hasFilters && (
+              <div className="lg:hidden flex items-center justify-between pb-3 border-b border-slate-100">
+                <span className="text-xs font-bold text-slate-950 uppercase tracking-wider">Filters Active</span>
+                <button onClick={resetFilters} className="text-xs font-bold text-rose-600 hover:text-rose-800 transition-colors">
+                  Clear All
+                </button>
+              </div>
+            )}
 
-          {/* Rating */}
-          <div className="space-y-3">
-            <label className="text-sm font-bold text-slate-900 uppercase tracking-wide">Min Rating</label>
-            <select
-              value={minRating}
-              onChange={(e) => setMinRating(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-sm focus:outline-none focus:border-indigo-500 cursor-pointer"
-            >
-              <option value="0">Any Rating</option>
-              <option value="4.5">4.5+ Stars</option>
-              <option value="4.8">4.8+ Stars</option>
-            </select>
-          </div>
-        </aside>
+            {/* Categories */}
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-1">Category</div>
+              <div className="space-y-0.5">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategory(cat)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      category === cat
+                        ? 'bg-indigo-50 text-indigo-600'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* Product Grid */}
-        <div className="flex-1">
-          {error ? (
-            <div className="bg-red-50 rounded-2xl p-12 text-center border border-red-200">
-              <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-red-900 mb-2">Failed to load products</h3>
-              <p className="text-red-700 max-w-md mx-auto">{error}</p>
+            <hr className="divider" />
+
+            {/* Price */}
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-1">Price Range</div>
+              <div className="space-y-0.5">
+                {priceOptions.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setPriceRange(opt.value)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      priceRange === opt.value
+                        ? 'bg-indigo-50 text-indigo-600'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 animate-pulse">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="aspect-[3/4] bg-slate-200 rounded-2xl"></div>
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="bg-white rounded-2xl p-12 text-center border border-dashed border-slate-300">
-              <Filter className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-slate-900 mb-2">No products found</h3>
-              <p className="text-slate-500 max-w-xs mx-auto mb-6">Try adjusting your filters or search query to find what you're looking for.</p>
-              <button
-                onClick={() => { setQuery(''); setCategory('All'); setPriceRange('all'); }}
-                className="text-indigo-600 font-semibold hover:underline"
-              >
+
+            {hasFilters && (
+              <button onClick={resetFilters} className="w-full text-sm text-rose-500 hover:text-rose-700 font-medium px-3 py-2 text-left">
                 Clear all filters
               </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filtered.map((product) => (
-                <ProductCard key={product.id} product={product} />
-              ))}
-            </div>
-          )}
+            )}
+          </aside>
+
+          {/* Product grid */}
+          <div className="flex-1 min-w-0">
+            {/* Results count */}
+            {!loading && !error && (
+              <div className="text-xs text-slate-400 mb-4">
+                {filtered.length} {filtered.length === 1 ? 'product' : 'products'} found
+              </div>
+            )}
+
+            {error ? (
+              <div className="card p-10 text-center">
+                <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
+                <h3 className="font-semibold text-slate-800 mb-1">Failed to load products</h3>
+                <p className="text-sm text-slate-500 mb-4">{error}</p>
+                <button onClick={() => window.location.reload()} className="btn-primary text-sm">
+                  Retry
+                </button>
+              </div>
+            ) : loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="card aspect-[4/5] animate-pulse bg-slate-100" />
+                ))}
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="card p-12 text-center">
+                <Search className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                <h3 className="font-semibold text-slate-800 mb-1">No products found</h3>
+                <p className="text-sm text-slate-500 mb-4">Try adjusting your search or filters.</p>
+                <button onClick={resetFilters} className="btn-secondary text-sm">
+                  Clear filters
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                {filtered.map(product => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

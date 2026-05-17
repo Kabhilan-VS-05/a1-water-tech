@@ -4,86 +4,82 @@ import { useCart } from '../state/CartContext.jsx'
 import { useToast } from '../state/ToastContext.jsx'
 import { formatCurrency } from '../utils/format.js'
 import { useState } from 'react'
+import { getProductImage, handleImageError } from '../utils/imageUtils.js'
 
 export default function ProductCard({ product }) {
   const { addItem } = useCart()
   const { showToast } = useToast()
   const [adding, setAdding] = useState(false)
 
-  const handleAdd = async () => {
+  const handleAdd = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
     setAdding(true)
     try {
       await addItem(product.id)
       showToast(`${product.name} added to cart`)
-      setTimeout(() => setAdding(false), 800)
+      setTimeout(() => setAdding(false), 1200)
     } catch {
-      showToast('Unable to add this item right now. Please try again.', 'error')
+      showToast('Unable to add item. Please try again.', 'error')
       setAdding(false)
     }
   }
 
   return (
-    <div className="group bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-xl hover:border-slate-200 transition-all duration-300 flex flex-col h-full overflow-hidden">
-      {/* Image Container */}
-      <div className="relative aspect-[4/3] overflow-hidden bg-slate-50">
-        <Link to={`/shop/${product.id}`} className="block h-full w-full">
+    <div className="card flex flex-col h-full overflow-hidden group">
+      {/* Image */}
+      <div className="relative aspect-[4/3] overflow-hidden bg-slate-100">
+        <Link to={`/shop/${product.id}`} className="block w-full h-full">
           <img
-            src={product.imageUrl || '/sample-product.jpg'}
+            src={getProductImage(product)}
             alt={product.name}
-            onError={(event) => {
-              event.currentTarget.onerror = null
-              event.currentTarget.src = '/sample-product.jpg'
-            }}
-            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+            onError={(e) => handleImageError(e, 'product')}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
           />
         </Link>
-        {product.tag && (
-          <span className="absolute top-3 left-3 bg-indigo-600 text-white text-[10px] uppercase font-bold px-2 py-1 rounded-full tracking-wide shadow-md">
-            {product.tag}
+
+        {product.category && (
+          <span className="absolute top-3 left-3 badge badge-neutral text-[10px] bg-white/90 backdrop-blur-sm">
+            {product.category}
           </span>
         )}
+
+        <button
+          onClick={handleAdd}
+          disabled={adding}
+          className={`absolute bottom-3 right-3 w-9 h-9 rounded-lg flex items-center justify-center shadow-md transition-all duration-200 active:scale-95 ${
+            adding
+              ? 'bg-emerald-500 text-white'
+              : 'bg-white text-slate-700 hover:bg-indigo-600 hover:text-white'
+          }`}
+          title="Add to cart"
+        >
+          {adding ? <Check className="w-4 h-4" /> : <ShoppingCart className="w-4 h-4" />}
+        </button>
       </div>
 
       {/* Content */}
-      <div className="p-5 flex flex-col flex-1">
-        <div className="flex justify-between items-start gap-2 mb-2">
-          <Link to={`/shop/${product.id}`} className="block">
-            <h3 className="font-bold text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors line-clamp-2">
+      <div className="p-4 flex flex-col flex-1">
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <Link to={`/shop/${product.id}`} className="flex-1 min-w-0">
+            <h3 className="text-sm font-semibold text-slate-800 leading-snug line-clamp-2 group-hover:text-indigo-600 transition-colors">
               {product.name}
             </h3>
           </Link>
-          <div className="flex items-center gap-1 bg-amber-50 px-1.5 py-0.5 rounded text-amber-700 flex-shrink-0">
-            <span className="text-xs font-bold">{product.rating}</span>
-            <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
-          </div>
         </div>
 
-        <p className="text-xs text-slate-500 mb-4 line-clamp-2">{product.description}</p>
+        {product.description && (
+          <p className="text-xs text-slate-400 mb-3 line-clamp-2 leading-relaxed">
+            {product.description}
+          </p>
+        )}
 
-        <div className="mt-auto flex items-end justify-between gap-3">
+        <div className="mt-auto pt-3 border-t border-slate-50 flex items-center justify-between">
           <div>
-            <span className="text-xs text-slate-400 font-medium">Price</span>
-            <p className="text-lg font-bold text-slate-900">{formatCurrency(product.price)}</p>
+            <div className="text-xs text-slate-400">Price</div>
+            <div className="text-base font-bold text-indigo-600">{formatCurrency(product.price)}</div>
           </div>
-
-          <button
-            onClick={handleAdd}
-            disabled={adding}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${adding
-                ? 'bg-green-100 text-green-700 cursor-default'
-                : 'bg-slate-900 text-white hover:bg-indigo-600 shadow-md hover:shadow-indigo-200 active:scale-95'
-              }`}
-          >
-            {adding ? (
-              <>
-                <Check className="w-4 h-4" /> Added
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="w-4 h-4" /> Add
-              </>
-            )}
-          </button>
+          <span className="badge badge-success text-[10px]">In Stock</span>
         </div>
       </div>
     </div>

@@ -161,3 +161,25 @@ export async function signOutFromCognito() {
     cognitoUser.signOut()
   }
 }
+
+export async function forgotPassword(email) {
+  const cognitoUser = await createCognitoUser(String(email || '').trim())
+
+  return new Promise((resolve, reject) => {
+    cognitoUser.forgotPassword({
+      onSuccess: resolve,
+      onFailure: reject,
+    })
+  })
+}
+
+export async function confirmPassword(email, code, newPassword) {
+  const cognitoUser = await createCognitoUser(String(email || '').trim())
+
+  return new Promise((resolve, reject) => {
+    cognitoUser.confirmPassword(code, newPassword, {
+      onSuccess: resolve,
+      onFailure: reject,
+    })
+  })
+}

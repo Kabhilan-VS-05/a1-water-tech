@@ -8,7 +8,7 @@ const getMillis = (value) => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-export default function useOrders(userId) {
+export default function useOrders(userId, refreshKey = 0) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -56,7 +56,7 @@ export default function useOrders(userId) {
     return () => {
       active = false
     }
-  }, [userId])
+  }, [userId, refreshKey])
 
   return { orders, loading }
 }

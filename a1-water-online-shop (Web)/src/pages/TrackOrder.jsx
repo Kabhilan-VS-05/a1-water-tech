@@ -1,13 +1,20 @@
 import { useState } from 'react'
-import { Search, Loader2, Package, CheckCircle, Clock } from 'lucide-react'
+import { Search, Loader2, Package, CheckCircle, Clock, Truck, ChevronRight } from 'lucide-react'
 import { useAuth } from '../state/AuthContext.jsx'
 
 const formatDateTime = (value) => {
   if (!value) return 'Not available'
-  if (typeof value?.toDate === 'function') return value.toDate().toLocaleString()
+  if (typeof value?.toDate === 'function') return value.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
   const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? 'Not available' : parsed.toLocaleString()
+  return Number.isNaN(parsed.getTime()) ? 'Not available' : parsed.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
+
+const steps = [
+  { key: 'placed',    label: 'Order Placed',    icon: CheckCircle, activeOn: ['pending', 'confirmed', 'shipped', 'delivered'] },
+  { key: 'confirmed', label: 'Confirmed',        icon: Package,     activeOn: ['confirmed', 'shipped', 'delivered'] },
+  { key: 'shipped',   label: 'Shipped',          icon: Truck,       activeOn: ['shipped', 'delivered'] },
+  { key: 'delivered', label: 'Delivered',        icon: CheckCircle, activeOn: ['delivered'] },
+]
 
 export default function TrackOrder() {
   const { user } = useAuth()
@@ -19,136 +26,141 @@ export default function TrackOrder() {
   const handleTrack = async (e) => {
     e.preventDefault()
     if (!searchId.trim() || !user) return
-
-    const normalizedOrderId = searchId.trim().replace(/^#/, '')
-
-    setLoading(true)
-    setError('')
-    setOrder(null)
-
+    const orderId = searchId.trim().replace(/^#/, '')
+    setLoading(true); setError(''); setOrder(null)
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL
-      if (!baseUrl) {
-        throw new Error('Missing VITE_API_BASE_URL')
-      }
-
-      const response = await fetch(
-        `${baseUrl}/orders/track?userId=${encodeURIComponent(user.uid)}&orderId=${encodeURIComponent(normalizedOrderId)}`,
+      if (!baseUrl) throw new Error('Missing VITE_API_BASE_URL')
+      const res = await fetch(
+        `${baseUrl}/orders/track?userId=${encodeURIComponent(user.uid)}&orderId=${encodeURIComponent(orderId)}`
       )
-
-      if (response.status === 404) {
-        setError('Order not found. Please check the ID.')
-      } else if (!response.ok) {
-        throw new Error(`Track order request failed: ${response.status}`)
+      if (res.status === 404) {
+        setError('Order not found. Please check your Order ID.')
+      } else if (!res.ok) {
+        throw new Error(`Request failed: ${res.status}`)
       } else {
-        const data = await response.json()
+        const data = await res.json()
         setOrder(data.item || null)
       }
     } catch (err) {
       console.error(err)
-      setError('Failed to fetch order details. Please try again.')
+      setError('Could not fetch order details. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
-  return (
-    <div className="container mx-auto px-4 py-8 lg:py-16 font-sans">
-      <div className="max-w-xl mx-auto text-center mb-10">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">Track Your Order</h1>
-        <p className="text-slate-500">Enter your Order ID to see the current status.</p>
-      </div>
+  const statusLower = order?.status?.toLowerCase() || 'pending'
 
-      <div className="max-w-md mx-auto">
-        <form onSubmit={handleTrack} className="flex flex-col gap-4 mb-8">
-          <div className="relative">
+  return (
+    <div className="page-bg">
+      <div className="container mx-auto px-4 max-w-xl py-8">
+
+        <div className="mb-7">
+          <h1 className="text-2xl font-bold text-slate-900">Track Order</h1>
+          <p className="text-sm text-slate-500 mt-1">Enter your Order ID to see its current status.</p>
+        </div>
+
+        {/* Search form */}
+        <form onSubmit={handleTrack} className="flex gap-2 mb-5">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
               type="text"
-              placeholder="Enter Order ID (e.g., A1-123456-123)"
               value={searchId}
-              onChange={(e) => setSearchId(e.target.value)}
-              className="w-full pl-5 pr-12 py-3.5 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm"
+              onChange={e => setSearchId(e.target.value)}
+              placeholder="Order ID (e.g., A1-123456-789)"
+              className="input pl-9 py-2.5"
             />
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <Search className="w-5 h-5 text-slate-400" />
-            </div>
           </div>
           <button
             type="submit"
-            disabled={loading || !searchId}
-            className="w-full py-3.5 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 transition-all disabled:bg-indigo-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            disabled={loading || !searchId.trim()}
+            className="btn-primary px-5 py-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Track Order'}
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Track'}
           </button>
         </form>
 
+        {/* Error */}
         {error && (
-          <div className="p-4 bg-red-50 text-red-700 rounded-xl border border-red-100 font-medium text-center">
+          <div className="card p-4 bg-red-50 border-red-200 text-sm text-red-600 mb-4">
             {error}
           </div>
         )}
 
+        {/* Order result */}
         {order && (
-          <div className="bg-white rounded-2xl p-6 border border-slate-100 shadow-xl shadow-slate-200/50 animate-accordion-down">
-            <div className="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
+          <div className="card p-5">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-5 pb-4 border-b border-slate-50">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Order Status</h2>
-                <p className="text-sm text-slate-500">ID: {order.orderId}</p>
+                <h2 className="text-base font-bold text-slate-900">Order #{order.orderId}</h2>
+                <p className="text-xs text-slate-400 mt-0.5">Placed on {formatDateTime(order.createdAt)}</p>
               </div>
-              <div className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${order.status === 'Delivered'
-                  ? 'bg-green-50 text-green-700 border-green-200'
-                  : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                }`}>
+              <span className={`badge capitalize ${
+                statusLower === 'delivered' ? 'badge-success'
+                : statusLower === 'cancelled' ? 'badge-error'
+                : 'badge-primary'
+              }`}>
                 {order.status || 'Processing'}
+              </span>
+            </div>
+
+            {/* Timeline */}
+            <div className="relative mb-5">
+              <div className="absolute left-3.5 top-4 bottom-4 w-0.5 bg-slate-100 z-0" />
+              <div className="space-y-5">
+                {steps.map(s => {
+                  const isActive = s.activeOn.includes(statusLower)
+                  return (
+                    <div key={s.key} className="relative flex items-start gap-3 z-10">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 border-2 border-white shadow-sm ${
+                        isActive ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-300'
+                      }`}>
+                        <s.icon className="w-3.5 h-3.5" />
+                      </div>
+                      <div className="pt-0.5">
+                        <div className={`text-sm font-semibold ${isActive ? 'text-slate-900' : 'text-slate-400'}`}>
+                          {s.label}
+                        </div>
+                        {s.key === 'placed' && isActive && (
+                          <div className="text-xs text-slate-400 mt-0.5">{formatDateTime(order.createdAt)}</div>
+                        )}
+                        {s.key === 'delivered' && !isActive && (
+                          <div className="text-xs text-slate-400 mt-0.5">Estimated 3–5 business days</div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
-            <div className="space-y-6 relative">
-              {/* Timeline (Simplified) */}
-              <div className="absolute left-3.5 top-2 bottom-2 w-0.5 bg-slate-100"></div>
-
-              <div className="relative flex items-start gap-4">
-                <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center border-2 border-white shadow-sm z-10">
-                  <CheckCircle className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-slate-900 text-sm">Order Placed</h4>
-                  <p className="text-xs text-slate-500">{formatDateTime(order.createdAt)}</p>
-                </div>
+            {/* Items */}
+            {order.items?.length > 0 && (
+              <div className="border-t border-slate-50 pt-4">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">Items</div>
+                <ul className="space-y-2">
+                  {order.items.map((item, i) => (
+                    <li key={i} className="flex justify-between text-sm">
+                      <span className="text-slate-700 truncate max-w-[200px]">{item.name}</span>
+                      <span className="text-slate-400 flex-shrink-0 ml-2">×{item.qty}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
+            )}
 
-              <div className="relative flex items-start gap-4">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-sm z-10 ${order.status !== 'Pending' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
-                  <Package className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className={`font-bold text-sm ${order.status !== 'Pending' ? 'text-slate-900' : 'text-slate-400'}`}>Processing</h4>
-                  <p className="text-xs text-slate-500">Your order is being prepared.</p>
-                </div>
-              </div>
-
-              <div className="relative flex items-start gap-4">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center border-2 border-white shadow-sm z-10 ${order.status === 'Delivered' ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
-                  <Clock className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className={`font-bold text-sm ${order.status === 'Delivered' ? 'text-slate-900' : 'text-slate-400'}`}>Delivery</h4>
-                  <p className="text-xs text-slate-500">Estimated within 3-5 days.</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 pt-4 border-t border-slate-100">
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-3">Items Ordered</p>
-              <ul className="space-y-3">
-                {order.items?.map((item, i) => (
-                  <li key={i} className="flex justify-between items-center text-sm">
-                    <span className="text-slate-700 font-medium truncate max-w-[200px]">{item.name}</span>
-                    <span className="text-slate-500">x{item.qty}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <button
+              onClick={() => {
+                sessionStorage.setItem('lastOrder', JSON.stringify(order))
+                window.location.href = `/order-confirmation/${order.orderId || order.id}`
+              }}
+              className="btn-secondary w-full justify-center mt-4 py-2.5 text-sm"
+            >
+              View Full Order Details <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
         )}
       </div>

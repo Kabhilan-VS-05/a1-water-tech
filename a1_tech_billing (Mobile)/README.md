@@ -1,16 +1,46 @@
-# a1_tech_billing
+# A1 Water Tech Billing App
 
-A new Flutter project.
+Flutter admin and billing application for A1 Water Tech.
 
-## Getting Started
+## What It Does
 
-This project is a starting point for a Flutter application.
+- Admin Cognito login
+- Offline-first local SQLite storage
+- Manual bill creation
+- Automatic billing from website orders
+- Customer management
+- Product/service catalog management
+- Order confirmation and billing
+- Invoice PDF generation
+- Background sync with the AWS API
 
-A few resources to get you started if this is your first Flutter project:
+## Active Structure
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```text
+lib/
+|-- main.dart
+|-- models/
+|-- screens/
+|   |-- billing/
+|   |-- catalog/
+|   |-- customers/
+|   `-- orders/
+`-- services/
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Archived legacy Dart files are kept in `legacy_lib/` and excluded from active
+analysis.
+
+## Verification
+
+```cmd
+flutter analyze --no-pub
+flutter test --no-pub
+flutter build apk --debug --no-pub
+```
+
+The debug APK is generated at:
+
+```text
+build/app/outputs/flutter-apk/app-debug.apk
+```

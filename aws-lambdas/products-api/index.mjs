@@ -16,15 +16,21 @@ function getPool() {
       ssl: {
         rejectUnauthorized: false,
       },
-      max: 2,
-      idleTimeoutMillis: 5000,
-      connectionTimeoutMillis: 5000,
+      max: 10,
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 10000,
     })
   }
 
   return pool
 }
 
+function safeQuery(promise) {
+  return promise.catch(err => {
+    console.error('Database query error:', err);
+    return { rows: [] };
+  });
+}
 function response(statusCode, body) {
   return {
     statusCode,
@@ -34,12 +40,14 @@ function response(statusCode, body) {
       'Access-Control-Allow-Headers': 'Content-Type,Authorization',
       'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(body, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value
+    ),
   }
 }
 
 function getPath(event) {
-  return event?.rawPath || event?.requestContext?.http?.path || ''
+  return event?.rawPath || event?.path || event?.requestContext?.http?.path || '';
 }
 
 function getMethod(event) {
@@ -64,7 +72,7 @@ function getPathId(path, prefix) {
 }
 
 async function fetchProducts() {
-  const result = await getPool().query(`
+  const result = await safeQuery(getPool().query(`
     select
       id,
       name,
@@ -82,15 +90,15 @@ async function fetchProducts() {
     from products
     where is_active = true
     order by name asc
-  `)
+  `));
 
   return {
     items: result.rows,
-  }
+  };
 }
 
 async function fetchServices() {
-  const result = await getPool().query(`
+  const result = await safeQuery(getPool().query(`
     select
       id,
       name,
@@ -102,7 +110,7 @@ async function fetchServices() {
     from services
     where is_active = true
     order by name asc
-  `)
+  `));
 
   return {
     items: result.rows,
@@ -110,7 +118,7 @@ async function fetchServices() {
 }
 
 async function fetchAnnouncements() {
-  const result = await getPool().query(`
+  const result = await safeQuery(getPool().query(`
     select
       id,
       title,
@@ -121,7 +129,25 @@ async function fetchAnnouncements() {
     from announcements
     where is_active = true
     order by is_pinned desc, created_at desc
-  `)
+  `));
+
+  return {
+    items: result.rows,
+  }
+}
+
+async function fetchFaqs() {
+  const result = await safeQuery(getPool().query(`
+    select
+      id,
+      q,
+      a,
+      is_active as "isActive",
+      created_at as "createdAt"
+    from faqs
+    where is_active = true
+    order by id asc
+  `));
 
   return {
     items: result.rows,
@@ -129,7 +155,7 @@ async function fetchAnnouncements() {
 }
 
 async function fetchBusinessSettings() {
-  const result = await getPool().query(`
+  const result = await safeQuery(getPool().query(`
     select
       company_name as "companyName",
       support_phone as "supportPhone",
@@ -142,13 +168,13 @@ async function fetchBusinessSettings() {
     from business_settings
     where id = 1
     limit 1
-  `)
+  `));
 
   return result.rows[0] || null
 }
 
 async function fetchBillingSettings() {
-  const result = await getPool().query(`
+  const result = await safeQuery(getPool().query(`
     select
       company_name as "companyName",
       support_phone as "supportPhone",
@@ -158,7 +184,7 @@ async function fetchBillingSettings() {
     from billing_settings
     where id = 1
     limit 1
-  `)
+  `));
 
   return result.rows[0] || null
 }
@@ -176,7 +202,7 @@ async function createFeedback(payload) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       insert into feedback (
         customer_name,
@@ -192,7 +218,7 @@ async function createFeedback(payload) {
       returning id, created_at as "createdAt"
     `,
     [customerName, phone, email, message, userId],
-  )
+  ));
 
   return response(201, {
     item: result.rows[0],
@@ -209,7 +235,7 @@ async function fetchBookings(userId) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       select
         id::text as id,
@@ -227,7 +253,31 @@ async function fetchBookings(userId) {
       order by created_at desc
     `,
     [normalizedUserId],
-  )
+  ));
+
+  return response(200, {
+    items: result.rows,
+  })
+}
+
+async function fetchBookedSlots(date) {
+  const normalizedDate = String(date || '').trim()
+
+  if (!normalizedDate) {
+    return response(400, {
+      message: 'date is required',
+    })
+  }
+
+  const result = await safeQuery(getPool().query(
+    `
+      select time_slot as time, count(*) as count
+      from bookings
+      where booking_date = $1::date and status != 'cancelled' and status != 'rejected'
+      group by time_slot
+    `,
+    [normalizedDate],
+  ));
 
   return response(200, {
     items: result.rows,
@@ -249,7 +299,7 @@ async function createBooking(payload) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       insert into bookings (
         user_id,
@@ -283,9 +333,53 @@ async function createBooking(payload) {
       addressId,
       JSON.stringify(addressSnapshot),
     ],
-  )
+  ));
 
   return response(201, {
+    item: result.rows[0],
+    ok: true,
+  })
+}
+
+async function updateBookingStatus(bookingId, payload) {
+  const id = String(bookingId || '').trim()
+  const status = String(payload?.status || '').trim()
+
+  if (!id || !status) {
+    return response(400, {
+      message: 'booking id and status are required',
+    })
+  }
+
+  const result = await safeQuery(getPool().query(
+    `
+      update bookings
+      set
+        status = $2,
+        updated_at = now()
+      where id = $1::bigint
+      returning
+        id::text as id,
+        user_id as "userId",
+        service_id as "serviceId",
+        service_name as "serviceName",
+        booking_date::text as date,
+        time_slot as time,
+        address_id as "addressId",
+        address_snapshot as "addressSnapshot",
+        status,
+        created_at as "createdAt"
+    `,
+    [id, status],
+  ));
+
+  if (result.rowCount === 0) {
+    return response(404, {
+      message: 'Booking not found',
+    })
+  }
+
+  return response(200, {
     item: result.rows[0],
     ok: true,
   })
@@ -300,7 +394,7 @@ async function fetchAddresses(userId) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       select
         id::text as id,
@@ -319,7 +413,7 @@ async function fetchAddresses(userId) {
       order by created_at desc
     `,
     [normalizedUserId],
-  )
+  ));
 
   return response(200, {
     items: result.rows,
@@ -342,7 +436,7 @@ async function createAddress(payload) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       insert into user_addresses (
         user_id,
@@ -369,7 +463,7 @@ async function createAddress(payload) {
         updated_at as "updatedAt"
     `,
     [userId, label, name, phone, email, city, pincode, address],
-  )
+  ));
 
   return response(201, {
     item: result.rows[0],
@@ -394,7 +488,7 @@ async function updateAddress(addressId, payload) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       update user_addresses
       set
@@ -421,7 +515,7 @@ async function updateAddress(addressId, payload) {
         updated_at as "updatedAt"
     `,
     [id, userId, label, name, phone, email, city, pincode, address],
-  )
+  ));
 
   if (result.rowCount === 0) {
     return response(404, {
@@ -445,14 +539,14 @@ async function deleteAddress(addressId, userId) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       delete from user_addresses
       where id = $1::bigint and user_id = $2
       returning id::text as id
     `,
     [id, normalizedUserId],
-  )
+  ));
 
   if (result.rowCount === 0) {
     return response(404, {
@@ -475,7 +569,7 @@ async function fetchOrders(userId) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       select
         id::text as id,
@@ -496,7 +590,7 @@ async function fetchOrders(userId) {
       order by created_at desc
     `,
     [normalizedUserId],
-  )
+  ));
 
   return response(200, {
     items: result.rows,
@@ -513,7 +607,7 @@ async function fetchTrackedOrder(userId, orderId) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       select
         id::text as id,
@@ -534,7 +628,7 @@ async function fetchTrackedOrder(userId, orderId) {
       limit 1
     `,
     [normalizedUserId, normalizedOrderId],
-  )
+  ));
 
   if (result.rowCount === 0) {
     return response(404, {
@@ -564,7 +658,7 @@ async function createOrder(payload) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       insert into orders (
         order_id,
@@ -605,7 +699,7 @@ async function createOrder(payload) {
       subtotal,
       total,
     ],
-  )
+  ));
 
   return response(201, {
     item: result.rows[0],
@@ -622,7 +716,7 @@ async function fetchCart(userId) {
     })
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       select
         product_id as id,
@@ -632,7 +726,7 @@ async function fetchCart(userId) {
       order by updated_at desc
     `,
     [normalizedUserId],
-  )
+  ));
 
   return response(200, {
     items: result.rows,
@@ -654,7 +748,7 @@ async function upsertCartItem(productId, payload) {
     return await deleteCartItem(normalizedProductId, userId)
   }
 
-  const result = await getPool().query(
+  const result = await safeQuery(getPool().query(
     `
       insert into cart_items (
         user_id,
@@ -671,7 +765,7 @@ async function upsertCartItem(productId, payload) {
         qty
     `,
     [userId, normalizedProductId, qty],
-  )
+  ));
 
   return response(200, {
     item: result.rows[0],
@@ -689,13 +783,13 @@ async function deleteCartItem(productId, userId) {
     })
   }
 
-  await getPool().query(
+  await safeQuery(getPool().query(
     `
       delete from cart_items
       where user_id = $1 and product_id = $2
     `,
     [normalizedUserId, normalizedProductId],
-  )
+  ));
 
   return response(200, {
     ok: true,
@@ -712,13 +806,13 @@ async function clearCart(userId) {
     })
   }
 
-  await getPool().query(
+  await safeQuery(getPool().query(
     `
       delete from cart_items
       where user_id = $1
     `,
     [normalizedUserId],
-  )
+  ));
 
   return response(200, {
     ok: true,
@@ -727,12 +821,13 @@ async function clearCart(userId) {
 
 export const handler = async (event) => {
   const method = getMethod(event)
+  const path = getPath(event)
+
+  console.log(`Incoming request: ${method} ${path}`);
 
   if (method === 'OPTIONS') {
     return response(200, { ok: true })
   }
-
-  const path = getPath(event)
 
   try {
     const adminResponse = await handleAdminRoute({
@@ -762,6 +857,10 @@ export const handler = async (event) => {
       return response(200, await fetchAnnouncements())
     }
 
+    if (method === 'GET' && path.endsWith('/faqs')) {
+      return response(200, await fetchFaqs())
+    }
+
     if (method === 'GET' && path.endsWith('/settings/business')) {
       return response(200, {
         item: await fetchBusinessSettings(),
@@ -782,8 +881,23 @@ export const handler = async (event) => {
       return await fetchBookings(getQueryValue(event, 'userId'))
     }
 
+    if (method === 'GET' && path.endsWith('/bookings/availability')) {
+      return await fetchBookedSlots(getQueryValue(event, 'date'))
+    }
+
     if (method === 'POST' && path.endsWith('/bookings')) {
-      return await createBooking(parseJsonBody(event?.body))
+      const body = parseJsonBody(event?.body)
+      if (body?.action === 'cancel') {
+        return await updateBookingStatus(body?.bookingId, { status: 'cancelled' })
+      }
+      return await createBooking(body)
+    }
+
+    if (method === 'PUT' && path.includes('/bookings/') && path.endsWith('/status')) {
+      return await updateBookingStatus(
+        getPathId(path, '/bookings/'),
+        parseJsonBody(event?.body),
+      )
     }
 
     if (method === 'GET' && path.endsWith('/addresses')) {
@@ -855,6 +969,8 @@ export const handler = async (event) => {
 
     return response(500, {
       message: 'Failed to fetch data',
+      error: error.message,
+      stack: error.stack,
       method,
       path,
     })

@@ -9,18 +9,22 @@ import { AuthProvider } from './state/AuthContext.jsx'
 import { SiteSettingsProvider } from './state/SiteSettingsContext.jsx'
 import { ToastProvider } from './state/ToastContext.jsx'
 
+import { ThemeProvider } from './state/ThemeContext.jsx'
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <AuthProvider>
-        <ToastProvider>
-          <SiteSettingsProvider>
-            <CartProvider>
-              <App />
-            </CartProvider>
-          </SiteSettingsProvider>
-        </ToastProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <SiteSettingsProvider>
+              <CartProvider>
+                <App />
+              </CartProvider>
+            </SiteSettingsProvider>
+          </ToastProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   </StrictMode>,
 )

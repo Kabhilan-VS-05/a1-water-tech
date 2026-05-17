@@ -5,7 +5,7 @@ import { confirmSignUpWithCognito, resendConfirmationCode } from '../cognito.js'
 import { Mail, Lock, ArrowRight, Loader2, AlertCircle, ShieldCheck } from 'lucide-react'
 
 export default function Login() {
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, forgotPassword, confirmPassword } = useAuth()
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -32,6 +32,16 @@ export default function Login() {
         await signIn(email, password)
         const next = location.state?.from || '/shop'
         navigate(next, { replace: true })
+      } else if (mode === 'forgot') {
+        await forgotPassword(email)
+        setMode('reset')
+        setNotice('Verification code sent. Check your email to reset your password.')
+      } else if (mode === 'reset') {
+        await confirmPassword(email, code.trim(), password)
+        setMode('login')
+        setCode('')
+        setPassword('')
+        setNotice('Password reset successful. Sign in with your new password.')
       } else {
         const result = await signUp(email, password)
         if (result?.confirmed) {
@@ -48,7 +58,7 @@ export default function Login() {
         setMode('confirm')
         setNotice('Your account is not verified yet. Enter the code from your email.')
       } else {
-        setError(err.message || 'Authentication failed. Please check your credentials.')
+        setError(err.message || 'Authentication failed. Please check your inputs.')
       }
     } finally {
       setLoading(false)
@@ -84,40 +94,50 @@ export default function Login() {
               ? 'Welcome Back'
               : mode === 'signup'
                 ? 'Create Account'
-                : 'Verify Email'}
+                : mode === 'forgot' 
+                  ? 'Forgot Password'
+                  : mode === 'reset'
+                    ? 'Reset Password'
+                    : 'Verify Email'}
           </h2>
           <p className="mt-2 text-sm text-slate-500">
             {mode === 'login'
               ? 'Sign in to access your orders and bookings.'
               : mode === 'signup'
                 ? 'Join A1 Water Tech for exclusive services.'
-                : 'Enter the verification code that Cognito sent to your email.'}
+                : mode === 'forgot'
+                  ? 'Enter your email to receive a password reset code.'
+                  : mode === 'reset'
+                    ? 'Enter the verification code and your new password.'
+                    : 'Enter the verification code that Cognito sent to your email.'}
           </p>
         </div>
 
         {/* Tabs */}
-        <div className="flex p-1 bg-slate-100 rounded-xl">
-          <button
-            type="button"
-            onClick={() => setMode('login')}
-            className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${mode === 'login'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-              }`}
-          >
-            Log In
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('signup')}
-            className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${mode === 'signup'
-                ? 'bg-white text-indigo-600 shadow-sm'
-                : 'text-slate-500 hover:text-slate-700'
-              }`}
-          >
-            Sign Up
-          </button>
-        </div>
+        {(mode === 'login' || mode === 'signup') && (
+          <div className="flex p-1 bg-slate-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${mode === 'login'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+                }`}
+            >
+              Log In
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('signup')}
+              className={`flex-1 py-2.5 text-sm font-bold rounded-lg transition-all ${mode === 'signup'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+                }`}
+            >
+              Sign Up
+            </button>
+          </div>
+        )}
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
@@ -134,14 +154,15 @@ export default function Login() {
                   autoComplete="email"
                   required
                   value={email}
+                  disabled={mode === 'reset' || mode === 'confirm'}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-slate-200 placeholder-slate-400 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-shadow"
+                  className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-slate-200 placeholder-slate-400 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-shadow disabled:bg-slate-100 disabled:text-slate-500"
                   placeholder="Email address"
                 />
               </div>
             </div>
 
-            {mode === 'confirm' ? (
+            {(mode === 'confirm' || mode === 'reset') && (
               <div>
                 <label htmlFor="code" className="sr-only">Verification code</label>
                 <div className="relative">
@@ -160,7 +181,9 @@ export default function Login() {
                   />
                 </div>
               </div>
-            ) : (
+            )}
+            
+            {(mode === 'login' || mode === 'signup' || mode === 'reset') && (
               <div>
                 <label htmlFor="password" className="sr-only">Password</label>
                 <div className="relative">
@@ -171,14 +194,29 @@ export default function Login() {
                     id="password"
                     name="password"
                     type="password"
-                    autoComplete="current-password"
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="appearance-none relative block w-full pl-10 pr-3 py-3 border border-slate-200 placeholder-slate-400 text-slate-900 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition-shadow"
-                    placeholder="Password"
+                    placeholder={mode === 'reset' ? "New password" : "Password"}
                   />
                 </div>
+                {mode === 'login' && (
+                  <div className="mt-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('forgot')
+                        setError('')
+                        setNotice('')
+                      }}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-700"
+                    >
+                      Forgot your password?
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -209,7 +247,11 @@ export default function Login() {
                   ? 'Sign In'
                   : mode === 'signup'
                     ? 'Create Account'
-                    : 'Verify Code'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    : mode === 'forgot'
+                      ? 'Send Verification Code'
+                      : mode === 'reset'
+                        ? 'Reset Password'
+                        : 'Verify Code'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </div>
             )}
           </button>
@@ -222,6 +264,21 @@ export default function Login() {
               className="w-full text-sm font-bold text-indigo-600 hover:text-indigo-700 disabled:text-indigo-300"
             >
               Resend verification code
+            </button>
+          )}
+
+          {(mode === 'forgot' || mode === 'reset' || mode === 'confirm') && (
+            <button
+              type="button"
+              onClick={() => {
+                setMode('login')
+                setError('')
+                setNotice('')
+              }}
+              disabled={loading}
+              className="w-full text-sm font-bold text-slate-500 hover:text-slate-700 disabled:text-slate-300"
+            >
+              Back to log in
             </button>
           )}
         </form>

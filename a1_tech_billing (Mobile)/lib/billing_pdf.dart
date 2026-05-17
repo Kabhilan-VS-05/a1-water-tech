@@ -31,8 +31,8 @@ Future<Uint8List> buildBillingPdf({
 
   doc.addPage(
     pw.MultiPage(
-      pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(28),
+      pageFormat: PdfPageFormat.roll80,
+      margin: const pw.EdgeInsets.all(10),
       build: (pw.Context context) {
         return <pw.Widget>[
           pw.Row(
@@ -88,38 +88,25 @@ Future<Uint8List> buildBillingPdf({
               1: const pw.FlexColumnWidth(),
             },
             children: <pw.TableRow>[
-              pw.TableRow(children: <pw.Widget>[
-                cell('Name'),
-                cell(customerName),
-              ]),
-              pw.TableRow(children: <pw.Widget>[
-                cell('Phone'),
-                cell(phone),
-              ]),
-              pw.TableRow(children: <pw.Widget>[
-                cell('City'),
-                cell(city),
-              ]),
-              pw.TableRow(children: <pw.Widget>[
-                cell('Address'),
-                cell(address),
-              ]),
-              pw.TableRow(children: <pw.Widget>[
-                cell('Invoice Type'),
-                cell(invoiceType),
-              ]),
-              pw.TableRow(children: <pw.Widget>[
-                cell('Payment'),
-                cell(paymentMethod),
-              ]),
+              pw.TableRow(
+                children: <pw.Widget>[cell('Name'), cell(customerName)],
+              ),
+              pw.TableRow(children: <pw.Widget>[cell('Phone'), cell(phone)]),
+              pw.TableRow(children: <pw.Widget>[cell('City'), cell(city)]),
+              pw.TableRow(
+                children: <pw.Widget>[cell('Address'), cell(address)],
+              ),
+              pw.TableRow(
+                children: <pw.Widget>[cell('Invoice Type'), cell(invoiceType)],
+              ),
+              pw.TableRow(
+                children: <pw.Widget>[cell('Payment'), cell(paymentMethod)],
+              ),
             ],
           ),
 
           pw.SizedBox(height: 16),
-          pw.Text(
-            'Items',
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          ),
+          pw.Text('Items', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 6),
           pw.Table(
             border: pw.TableBorder.all(color: PdfColors.grey600, width: 0.6),

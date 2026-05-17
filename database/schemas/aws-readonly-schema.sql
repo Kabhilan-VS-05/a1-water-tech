@@ -112,3 +112,20 @@ values (
   false
 )
 on conflict (id) do nothing;
+
+create table if not exists faqs (
+  id serial primary key,
+  q text not null,
+  a text not null,
+  is_active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+insert into faqs (q, a)
+values 
+  ('Do you offer free water testing?', 'Yes. We provide a free in-home TDS and hardness test in select areas.'),
+  ('How quickly can you install a purifier?', 'Most installations are scheduled within 24 hours after order confirmation.'),
+  ('Is GST included in the listed price?', 'Yes. All listed prices include GST. The invoice will show the breakup.'),
+  ('What payment methods are supported?', 'UPI, card, netbanking, and EMI options on select products.')
+on conflict do nothing;

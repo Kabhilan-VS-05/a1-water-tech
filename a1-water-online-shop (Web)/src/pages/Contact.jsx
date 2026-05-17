@@ -5,15 +5,10 @@ import { useSiteSettings } from '../state/SiteSettingsContext.jsx'
 
 export default function Contact() {
   const settings = useSiteSettings()
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]     = useState(false)
   const [submitted, setSubmitted] = useState(false)
-  const [error, setError] = useState('')
-  const [form, setForm] = useState({
-    name: '',
-    phone: '',
-    email: '',
-    message: '',
-  })
+  const [error, setError]         = useState('')
+  const [form, setForm] = useState({ name: '', phone: '', email: '', message: '' })
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -21,15 +16,10 @@ export default function Contact() {
     setLoading(true)
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL
-      if (!baseUrl) {
-        throw new Error('Missing VITE_API_BASE_URL')
-      }
-
-      const response = await fetch(`${baseUrl}/feedback`, {
+      if (!baseUrl) throw new Error('Missing VITE_API_BASE_URL')
+      const res = await fetch(`${baseUrl}/feedback`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           customerName: form.name.trim(),
           phone: form.phone.trim(),
@@ -37,158 +27,158 @@ export default function Contact() {
           message: form.message.trim(),
         }),
       })
-
-      if (!response.ok) {
-        throw new Error(`Feedback request failed: ${response.status}`)
-      }
-
-      setLoading(false)
+      if (!res.ok) throw new Error(`Failed: ${res.status}`)
       setSubmitted(true)
-      setForm({
-        name: '',
-        phone: '',
-        email: '',
-        message: '',
-      })
+      setForm({ name: '', phone: '', email: '', message: '' })
     } catch {
+      setError('Unable to submit. Please try again in a moment.')
+    } finally {
       setLoading(false)
-      setError('Unable to submit now. Please try again in a minute.')
     }
   }
 
+  const contactInfo = [
+    { icon: Phone, label: 'Phone', primary: settings.phonePrimary, secondary: settings.phoneSecondary },
+    { icon: Mail,  label: 'Email', primary: settings.emailPrimary, secondary: settings.emailSecondary },
+    { icon: MapPin, label: 'Address', primary: settings.addressLine1, secondary: `${settings.addressLine2 || ''} ${settings.addressLine3 || ''} ${settings.locality || ''}`.trim() },
+  ]
+
   return (
-    <div className="container mx-auto px-4 py-12 max-w-6xl font-sans text-slate-900">
-      <PageHeader
-        eyebrow="Contact Us"
-        title="Talk to our water experts"
-        subtitle="Get installation help, service updates, and 24/7 order support."
-      />
+    <div className="page-bg">
+      <div className="container mx-auto px-4 max-w-5xl py-8">
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-12 mt-8">
-        {/* Contact Info */}
-        <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm space-y-8">
-            <h3 className="text-xl font-bold text-slate-900 mb-2">Get in touch</h3>
-            <p className="text-slate-500 text-sm leading-relaxed">
-              We're here to help with everything from product choice to installation booking and maintenance scheduling.
-            </p>
+        {/* Header */}
+        <div className="mb-8">
+          <p className="section-label mb-2">Contact Us</p>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Get in Touch</h1>
+          <p className="text-sm text-slate-500">Our team is here to help with installation queries, service updates, and order support.</p>
+        </div>
 
-            <div className="space-y-6">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 flex-shrink-0">
-                  <Phone className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Call Us</p>
-                  <p className="font-bold text-slate-900">{settings.phonePrimary}</p>
-                  <p className="text-sm text-slate-600">{settings.phoneSecondary}</p>
-                </div>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Contact info */}
+          <div className="lg:col-span-2 space-y-4">
+            <div className="card p-5 space-y-5">
+              {contactInfo.map(item => (
+                item.primary ? (
+                  <div key={item.label} className="flex items-start gap-3">
+                    <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 flex-shrink-0">
+                      <item.icon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">{item.label}</div>
+                      <div className="text-sm font-semibold text-slate-800">{item.primary}</div>
+                      {item.secondary && <div className="text-xs text-slate-500 mt-0.5">{item.secondary}</div>}
+                    </div>
+                  </div>
+                ) : null
+              ))}
 
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 flex-shrink-0">
-                  <Mail className="w-5 h-5" />
+              {settings.gstin && (
+                <div className="flex items-start gap-3 pt-3 border-t border-slate-50">
+                  <div className="text-xs text-slate-400">
+                    <span className="font-semibold">GSTIN:</span> {settings.gstin}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Email Us</p>
-                  <p className="font-bold text-slate-900">{settings.emailPrimary}</p>
-                  <p className="text-sm text-slate-600">{settings.emailSecondary}</p>
-                </div>
-              </div>
+              )}
 
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 flex-shrink-0">
-                  <MapPin className="w-5 h-5" />
+              <div className="flex items-center gap-2 pt-3 border-t border-slate-50">
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                  Mon – Sat, 9:00 AM – 8:00 PM
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wide">Office</p>
-                  <p className="font-bold text-slate-900">{settings.addressLine1}</p>
-                  <p className="text-sm text-slate-600">{settings.addressLine2}</p>
-                  <p className="text-sm text-slate-600">{settings.addressLine3}</p>
-                  <p className="text-xs text-slate-500 mt-1">GSTIN: {settings.gstin}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-8 border-t border-slate-100">
-              <div className="flex items-center gap-2 text-green-600 bg-green-50 px-4 py-2 rounded-lg text-sm font-bold">
-                <Clock className="w-4 h-4" /> Available Mon-Sat, 9 AM - 8 PM
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Callback Form */}
-        <div className="lg:col-span-3">
-          <div className="bg-white p-8 md:p-10 rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/50">
-            {submitted ? (
-              <div className="text-center py-12">
-                <div className="w-20 h-20 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <Send className="w-10 h-10" />
-                </div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-2">Request Submitted!</h3>
-                <p className="text-slate-500 mb-8">One of our water experts will call you back within 60 minutes.</p>
-                <button
-                  onClick={() => setSubmitted(false)}
-                  className="text-indigo-600 font-bold hover:underline"
-                >
-                  Send another request
-                </button>
-              </div>
-            ) : (
-              <>
-                <h3 className="text-xl font-bold text-slate-900 mb-1 flex items-center gap-2">
-                  <MessageSquare className="w-5 h-5 text-indigo-600" /> Request a Callback
-                </h3>
-                <p className="text-slate-500 text-sm mb-8">Leave your details and we'll get back to you shortly.</p>
-
-                <form className="space-y-4" onSubmit={handleSubmit}>
-                  {error && (
-                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                      {error}
-                    </div>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input
-                      placeholder="Full name"
-                      value={form.name}
-                      onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                      required
-                      className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    />
-                    <input
-                      placeholder="Phone number"
-                      value={form.phone}
-                      onChange={(e) => setForm((prev) => ({ ...prev, phone: e.target.value }))}
-                      required
-                      className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                    />
+          {/* Callback form */}
+          <div className="lg:col-span-3">
+            <div className="card p-6">
+              {submitted ? (
+                <div className="text-center py-10">
+                  <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Send className="w-6 h-6" />
                   </div>
-                  <input
-                    placeholder="Email address (Optional)"
-                    type="email"
-                    value={form.email}
-                    onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                  />
-                  <textarea
-                    rows="4"
-                    placeholder="Tell us about your water needs (e.g., Hard water problem, RO service required)"
-                    value={form.message}
-                    onChange={(e) => setForm((prev) => ({ ...prev, message: e.target.value }))}
-                    required
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all resize-none"
-                  />
+                  <h3 className="text-lg font-bold text-slate-900 mb-1">Request Submitted!</h3>
+                  <p className="text-sm text-slate-500 mb-5">Our team will call you back within 60 minutes during business hours.</p>
                   <button
-                    className="w-full py-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-lg shadow-xl shadow-slate-200 transition-all flex items-center justify-center gap-2 disabled:bg-slate-400"
-                    type="submit"
-                    disabled={loading}
+                    onClick={() => setSubmitted(false)}
+                    className="btn-secondary text-sm"
                   >
-                    {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <>Send Request <Send className="w-4 h-4" /></>}
+                    Send another request
                   </button>
-                </form>
-              </>
-            )}
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 mb-5">
+                    <MessageSquare className="w-4 h-4 text-indigo-600" />
+                    <h3 className="text-base font-bold text-slate-900">Request a Callback</h3>
+                  </div>
+                  <p className="text-sm text-slate-500 mb-5">Leave your details and we'll get back to you shortly.</p>
+
+                  <form className="space-y-4" onSubmit={handleSubmit}>
+                    {error && (
+                      <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-600">
+                        {error}
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Full Name <span className="text-red-500">*</span></label>
+                        <input
+                          placeholder="Your name"
+                          value={form.name}
+                          onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+                          required
+                          className="input"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number <span className="text-red-500">*</span></label>
+                        <input
+                          placeholder="+91 98765 43210"
+                          value={form.phone}
+                          onChange={e => setForm(p => ({ ...p, phone: e.target.value }))}
+                          required
+                          className="input"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Email Address</label>
+                      <input
+                        type="email"
+                        placeholder="Optional"
+                        value={form.email}
+                        onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                        className="input"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1.5">Message <span className="text-red-500">*</span></label>
+                      <textarea
+                        rows={4}
+                        placeholder="Describe your issue or requirement (e.g., RO not working, need annual service, etc.)"
+                        value={form.message}
+                        onChange={e => setForm(p => ({ ...p, message: e.target.value }))}
+                        required
+                        className="input resize-none"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="btn-primary w-full justify-center py-2.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {loading
+                        ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</>
+                        : <><Send className="w-4 h-4" /> Send Request</>
+                      }
+                    </button>
+                  </form>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../state/AuthContext.jsx'
 import useAddresses from '../hooks/useAddresses.js'
-import { User, MapPin, Mail, Phone, Settings, LogOut, Plus, Trash2, Edit2 } from 'lucide-react'
+import {
+  User, MapPin, Mail, Phone, LogOut, Plus, Trash2, Edit2,
+  ShieldCheck, Box, LayoutList, ChevronRight, Loader2, AlertCircle, CheckCircle
+} from 'lucide-react'
 
 const emptyAddressForm = {
   label: '',
@@ -23,6 +26,7 @@ export default function Profile() {
   const [addressStatus, setAddressStatus] = useState('')
   const [addressError, setAddressError] = useState('')
   const [addressForm, setAddressForm] = useState(emptyAddressForm)
+  const [isDeleting, setIsDeleting] = useState(null)
 
   const handleAddressSave = async (event) => {
     event.preventDefault()
@@ -30,54 +34,36 @@ export default function Profile() {
 
     try {
       setAddressError('')
-
       const baseUrl = import.meta.env.VITE_API_BASE_URL
-      if (!baseUrl) {
-        throw new Error('Missing VITE_API_BASE_URL')
-      }
+      if (!baseUrl) throw new Error('Missing VITE_API_BASE_URL')
 
-      const payload = {
-        userId: user.uid,
-        ...addressForm,
-      }
+      const payload = { userId: user.uid, ...addressForm }
 
       if (editingId) {
         const response = await fetch(`${baseUrl}/addresses/${editingId}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-
-        if (!response.ok) {
-          throw new Error(`Address update failed: ${response.status}`)
-        }
-
+        if (!response.ok) throw new Error('Failed to update')
         setEditingId('')
-        setAddressStatus('Address updated.')
+        setAddressStatus('Address updated successfully.')
       } else {
         const response = await fetch(`${baseUrl}/addresses`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-
-        if (!response.ok) {
-          throw new Error(`Address save failed: ${response.status}`)
-        }
-
-        setAddressStatus('Address saved.')
+        if (!response.ok) throw new Error('Failed to save')
+        setAddressStatus('Address added successfully.')
       }
 
       setAddressRefreshKey((current) => current + 1)
       setAddressForm(emptyAddressForm)
       setShowAddressForm(false)
-      setTimeout(() => setAddressStatus(''), 2500)
+      setTimeout(() => setAddressStatus(''), 3000)
     } catch {
-      setAddressError('Unable to save address right now. Please try again.')
+      setAddressError('Service unavailable. Please try again later.')
     }
   }
 
@@ -93,216 +79,318 @@ export default function Profile() {
       address: address.address || '',
     })
     setShowAddressForm(true)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const handleDelete = async (addressId) => {
-    if (!user) return
-
+    if (!user || !window.confirm('Delete this address?')) return
+    setIsDeleting(addressId)
     try {
-      setAddressError('')
-
       const baseUrl = import.meta.env.VITE_API_BASE_URL
-      if (!baseUrl) {
-        throw new Error('Missing VITE_API_BASE_URL')
-      }
-
-      const response = await fetch(
-        `${baseUrl}/addresses/${encodeURIComponent(addressId)}?userId=${encodeURIComponent(user.uid)}`,
-        {
-          method: 'DELETE',
-        },
-      )
-
-      if (!response.ok) {
-        throw new Error(`Address delete failed: ${response.status}`)
-      }
-
+      const response = await fetch(`${baseUrl}/addresses/${encodeURIComponent(addressId)}?userId=${encodeURIComponent(user.uid)}`, { method: 'DELETE' })
+      if (!response.ok) throw new Error('Delete failed')
       setAddressRefreshKey((current) => current + 1)
-      if (editingId === addressId) {
-        setEditingId('')
-        setAddressForm(emptyAddressForm)
-        setShowAddressForm(false)
-      }
     } catch {
-      setAddressError('Unable to delete address right now. Please try again.')
+      setAddressError('Could not delete address.')
+    } finally {
+      setIsDeleting(null)
     }
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 lg:py-12 max-w-5xl font-sans">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">My Account</h1>
-          <p className="text-slate-500">Manage your profile, addresses, and account settings.</p>
-        </div>
-        <button
-          onClick={signOut}
-          className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-lg font-semibold hover:bg-red-100 transition-colors"
-        >
-          <LogOut className="w-4 h-4" /> Sign Out
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Sidebar Actions */}
-        <div className="lg:col-span-1 space-y-4">
-          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center text-indigo-600">
-                <User className="w-8 h-8" />
-              </div>
-              <div>
-                <p className="font-bold text-slate-900 truncate max-w-[150px]">{user?.displayName || 'User'}</p>
-                <p className="text-sm text-slate-500 truncate max-w-[150px]">{user?.email}</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl text-slate-700">
-                <User className="w-4 h-4 text-slate-400" />
-                <span className="text-sm font-medium">Account Status: <span className="text-green-600 font-bold ml-1">Active</span></span>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl text-slate-700">
-                <Settings className="w-4 h-4 text-slate-400" />
-                <span className="text-sm font-medium">Preferences</span>
-              </div>
-            </div>
+    <div className="page-bg">
+      <div className="container mx-auto px-4 max-w-6xl py-8">
+        
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 border-b border-slate-100 pb-6">
+          <div>
+            <p className="section-label mb-1">Personal Account</p>
+            <h1 className="text-2xl font-bold text-slate-900">My Profile</h1>
+            <p className="text-sm text-slate-500 mt-1">Manage your saved delivery locations and account services.</p>
           </div>
-
-          <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 p-6 rounded-2xl text-white shadow-lg shadow-indigo-200">
-            <h3 className="font-bold text-lg mb-2">Need a checkup?</h3>
-            <p className="text-indigo-100 text-sm mb-4">Book a service slot for your purifier maintenance.</p>
-            <Link to="/bookings" className="block w-full py-2.5 bg-white text-indigo-600 text-center rounded-lg font-bold text-sm hover:bg-indigo-50 transition-colors">
-              Book Service Now
-            </Link>
-          </div>
+          <button
+            onClick={signOut}
+            className="btn-secondary text-sm px-4 py-2 border-rose-200 text-rose-600 hover:bg-rose-50 hover:border-rose-300 hover:text-rose-700 flex items-center gap-2"
+          >
+            <LogOut className="w-4 h-4" /> Sign Out
+          </button>
         </div>
 
-        {/* Main Content Areas */}
-        <div className="lg:col-span-2 space-y-8">
-          {/* Address Management */}
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <MapPin className="w-5 h-5 text-indigo-600" /> Saved Addresses
-              </h2>
-              {!showAddressForm && (
-                <button
-                  onClick={() => { setShowAddressForm(true); setEditingId(''); setAddressForm(emptyAddressForm) }}
-                  className="text-sm font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
-                >
-                  <Plus className="w-4 h-4" /> Add New
-                </button>
-              )}
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          
+          {/* Left Column - User Info Panel */}
+          <div className="lg:col-span-4 space-y-6">
+            
+            {/* User details card */}
+            <div className="card p-6 relative overflow-hidden bg-white">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <User className="w-6 h-6" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm text-slate-400 font-semibold uppercase tracking-wider">Authorized User</div>
+                  <h3 className="text-base font-bold text-slate-800 truncate mt-0.5">{user?.displayName || 'Customer Account'}</h3>
+                  <p className="text-xs text-slate-500 truncate mt-0.5">{user?.email}</p>
+                </div>
+              </div>
 
-            {showAddressForm && (
-              <div className="p-6 bg-slate-50 border-b border-slate-100 animate-accordion-down">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-4">{editingId ? 'Edit Address' : 'Add New Address'}</h3>
-                <form onSubmit={handleAddressSave} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {addressError && (
-                    <div className="md:col-span-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                      {addressError}
-                    </div>
-                  )}
-                  <input
-                    required
-                    placeholder="Label (Home/Office)"
-                    value={addressForm.label}
-                    onChange={(e) => setAddressForm({ ...addressForm, label: e.target.value })}
-                    className="p-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                  <input
-                    required
-                    placeholder="Full Name"
-                    value={addressForm.name}
-                    onChange={(e) => setAddressForm({ ...addressForm, name: e.target.value })}
-                    className="p-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                  <input
-                    required
-                    placeholder="Phone Number"
-                    value={addressForm.phone}
-                    onChange={(e) => setAddressForm({ ...addressForm, phone: e.target.value })}
-                    className="p-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                  <input
-                    required
-                    placeholder="Email"
-                    value={addressForm.email}
-                    onChange={(e) => setAddressForm({ ...addressForm, email: e.target.value })}
-                    className="p-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                  <input
-                    required
-                    placeholder="City"
-                    value={addressForm.city}
-                    onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })}
-                    className="p-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                  <input
-                    placeholder="Pincode"
-                    value={addressForm.pincode}
-                    onChange={(e) => setAddressForm({ ...addressForm, pincode: e.target.value })}
-                    className="p-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
-                  <textarea
-                    required
-                    rows="3"
-                    placeholder="Full Address"
-                    value={addressForm.address}
-                    onChange={(e) => setAddressForm({ ...addressForm, address: e.target.value })}
-                    className="md:col-span-2 p-3 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
-                  />
-                  <div className="md:col-span-2 flex gap-3 pt-2">
-                    <button type="submit" className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold text-sm shadow-md hover:bg-indigo-700 transition-colors">Save Address</button>
-                    <button type="button" onClick={() => setShowAddressForm(false)} className="bg-white border border-slate-200 text-slate-600 px-6 py-2 rounded-lg font-bold text-sm hover:bg-slate-50 transition-colors">Cancel</button>
+              {/* Navigation links inside profile */}
+              <div className="space-y-2">
+                <Link to="/orders" className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 transition-colors group">
+                  <div className="flex items-center gap-2.5">
+                    <Box className="w-4.5 h-4.5 text-slate-400 group-hover:text-indigo-600" />
+                    <span className="text-sm font-semibold text-slate-700 group-hover:text-indigo-600">Order History</span>
                   </div>
-                </form>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" />
+                </Link>
+                <Link to="/bookings" className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 transition-colors group">
+                  <div className="flex items-center gap-2.5">
+                    <LayoutList className="w-4.5 h-4.5 text-slate-400 group-hover:text-indigo-600" />
+                    <span className="text-sm font-semibold text-slate-700 group-hover:text-indigo-600">Service Bookings</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" />
+                </Link>
+              </div>
+            </div>
+
+            {/* Smart maintenance care plan banner */}
+            <div 
+              style={{ backgroundColor: '#4f46e5', color: '#ffffff' }}
+              className="p-6 rounded-[14px] shadow-lg shadow-indigo-100 hover:shadow-indigo-200 transition-all duration-200 hover:-translate-y-0.5"
+            >
+              <div className="w-10 h-10 bg-white/15 rounded-lg flex items-center justify-center mb-4">
+                <ShieldCheck className="w-5 h-5 text-indigo-200" />
+              </div>
+              <h3 className="font-bold text-lg mb-2" style={{ color: '#ffffff' }}>Smart Maintenance</h3>
+              <p className="text-sm leading-relaxed mb-5" style={{ color: '#e0e7ff' }}>
+                Protect your water purifier with AMC plans designed for Gobichettipalayam's water levels. Proactive filter replacements, free servicing visits, and priority assistance.
+              </p>
+              <Link 
+                to="/bookings" 
+                style={{ color: '#4f46e5', backgroundColor: '#ffffff' }}
+                className="inline-flex w-full items-center justify-center font-bold px-4 py-2.5 rounded-lg hover:bg-indigo-50 transition-colors text-sm shadow-sm"
+              >
+                Schedule Service Visit
+              </Link>
+            </div>
+
+          </div>
+
+          {/* Right Column - Address Management & Active Operations */}
+          <div className="lg:col-span-8 space-y-6">
+            
+            {/* Status alerts */}
+            {addressStatus && (
+              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 text-sm text-emerald-700 flex items-center gap-2">
+                <CheckCircle className="w-4.5 h-4.5 text-emerald-600 flex-shrink-0" />
+                {addressStatus}
+              </div>
+            )}
+            
+            {addressError && (
+              <div className="p-4 rounded-xl bg-rose-50 border border-rose-100 text-sm text-rose-700 flex items-center gap-2">
+                <AlertCircle className="w-4.5 h-4.5 text-rose-600 flex-shrink-0" />
+                {addressError}
               </div>
             )}
 
-            <div className="p-6">
-              {addressLoading ? (
-                <p className="text-slate-500 text-sm">Loading stored addresses...</p>
-              ) : addresses.length === 0 ? (
-                <div className="text-center py-8">
-                  <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
-                    <MapPin className="w-6 h-6" />
+            {/* Main addresses list panel */}
+            <div className="card p-6 bg-white">
+              <div className="flex items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-50">
+                <div>
+                  <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <MapPin className="w-4.5 h-4.5 text-indigo-600" /> Saved Locations
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">Shipping and service booking destinations.</p>
+                </div>
+                {!showAddressForm && (
+                  <button
+                    onClick={() => { setShowAddressForm(true); setEditingId(''); setAddressForm(emptyAddressForm) }}
+                    className="btn-primary text-xs px-3.5 py-2"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Location
+                  </button>
+                )}
+              </div>
+
+              {/* Dynamic location form */}
+              {showAddressForm && (
+                <div className="mb-6 p-5 bg-slate-50 rounded-xl border border-slate-200/60 animate-in fade-in duration-200">
+                  <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
+                    {editingId ? 'Modify Saved Address' : 'Register New Address'}
                   </div>
-                  <p className="text-slate-500 text-sm">No addresses saved yet.</p>
+                  
+                  <form onSubmit={handleAddressSave} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 ml-0.5">Address Label</label>
+                      <input
+                        required
+                        placeholder="e.g. Home, Office, Parent's House"
+                        value={addressForm.label}
+                        onChange={(e) => setAddressForm({ ...addressForm, label: e.target.value })}
+                        className="input py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 ml-0.5">Recipient Full Name</label>
+                      <input
+                        required
+                        placeholder="John Doe"
+                        value={addressForm.name}
+                        onChange={(e) => setAddressForm({ ...addressForm, name: e.target.value })}
+                        className="input py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 ml-0.5">Contact Number</label>
+                      <input
+                        required
+                        placeholder="10-digit phone"
+                        value={addressForm.phone}
+                        onChange={(e) => setAddressForm({ ...addressForm, phone: e.target.value })}
+                        className="input py-2"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 ml-0.5">Email Address</label>
+                      <input
+                        required
+                        type="email"
+                        placeholder="name@example.com"
+                        value={addressForm.email}
+                        onChange={(e) => setAddressForm({ ...addressForm, email: e.target.value })}
+                        className="input py-2"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 ml-0.5">Detailed Address Info</label>
+                      <textarea
+                        required
+                        rows="2"
+                        placeholder="Door number, building, locality name"
+                        value={addressForm.address}
+                        onChange={(e) => setAddressForm({ ...addressForm, address: e.target.value })}
+                        className="input py-2 resize-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 ml-0.5">City</label>
+                      <input
+                        required
+                        placeholder="e.g. Gobichettipalayam"
+                        value={addressForm.city}
+                        onChange={(e) => setAddressForm({ ...addressForm, city: e.target.value })}
+                        className="input py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 ml-0.5">Pincode</label>
+                      <input
+                        required
+                        placeholder="638452"
+                        value={addressForm.pincode}
+                        onChange={(e) => setAddressForm({ ...addressForm, pincode: e.target.value })}
+                        className="input py-2"
+                      />
+                    </div>
+                    <div className="sm:col-span-2 flex justify-end gap-2.5 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => { setShowAddressForm(false); setEditingId('') }}
+                        className="btn-secondary text-xs px-4 py-2"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn-primary text-xs px-5 py-2"
+                      >
+                        Save Address
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Saved Addresses list */}
+              {addressLoading ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Loader2 className="w-6 h-6 animate-spin text-indigo-600 mb-2" />
+                  <span className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Loading Locations...</span>
+                </div>
+              ) : addresses.length === 0 ? (
+                <div className="text-center py-10 rounded-xl bg-slate-50 border-2 border-dashed border-slate-200/70">
+                  <MapPin className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                  <h3 className="font-semibold text-slate-800 text-sm mb-0.5">No stored addresses</h3>
+                  <p className="text-xs text-slate-500 mb-4">Please add a location to easily request technician visits.</p>
+                  <button
+                    onClick={() => { setShowAddressForm(true); setEditingId(''); setAddressForm(emptyAddressForm) }}
+                    className="btn-primary text-xs px-4 py-2"
+                  >
+                    Add Address Location
+                  </button>
                 </div>
               ) : (
-                <div className="grid gap-4">
-                  {addresses.map((addr) => (
-                    <div key={addr.id} className="border border-slate-100 rounded-xl p-4 hover:border-indigo-100 hover:bg-indigo-50/30 transition-colors group relative">
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">{addr.label || 'Details'}</span>
-                          {addr.createdAt && <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">New</span>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {addresses.map(addr => (
+                    <div key={addr.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 flex flex-col justify-between group hover:border-indigo-100 transition-colors">
+                      <div>
+                        <div className="flex justify-between items-center mb-3">
+                          <span className="badge badge-primary text-[10px] uppercase font-semibold">
+                            {addr.label || 'Destination'}
+                          </span>
+                          <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => handleEdit(addr)}
+                              className="p-1.5 rounded bg-white hover:bg-indigo-50 text-indigo-600 shadow-sm border border-slate-100 transition-colors"
+                              title="Edit Location"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              disabled={isDeleting === addr.id}
+                              onClick={() => handleDelete(addr.id)}
+                              className="p-1.5 rounded bg-white hover:bg-rose-50 text-rose-600 shadow-sm border border-slate-100 transition-colors disabled:opacity-50"
+                              title="Delete Location"
+                            >
+                              {isDeleting === addr.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                : <Trash2 className="w-3.5 h-3.5" />
+                              }
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => handleEdit(addr)} className="text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-md transition-colors" title="Edit">
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button onClick={() => handleDelete(addr.id)} className="text-red-500 hover:bg-red-50 p-1.5 rounded-md transition-colors" title="Delete">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
+                        <h4 className="font-bold text-slate-800 text-sm leading-snug">{addr.name}</h4>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          {addr.address}, {addr.city} – {addr.pincode}
+                        </p>
                       </div>
-                      <p className="text-sm font-semibold text-slate-800 mb-1">{addr.name}</p>
-                      <p className="text-sm text-slate-500 mb-1">{addr.address}, {addr.city} {addr.pincode}</p>
-                      <p className="text-xs text-slate-400 flex items-center gap-2 mt-2">
-                        <Phone className="w-3 h-3" /> {addr.phone}
-                        <span className="w-1 h-1 bg-slate-300 rounded-full" />
-                        <Mail className="w-3 h-3" /> {addr.email}
-                      </p>
+
+                      <div className="mt-4 pt-3 border-t border-slate-100/60 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-400 font-medium">
+                        <span className="flex items-center gap-1"><Phone className="w-3 h-3 text-indigo-500" /> {addr.phone}</span>
+                        <span className="flex items-center gap-1 truncate max-w-[150px]"><Mail className="w-3 h-3 text-indigo-500" /> {addr.email}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
+
+            {/* Account Info Security Note */}
+            <div className="card p-5 bg-indigo-50/50 border-indigo-100/80 flex items-start gap-3">
+              <ShieldCheck className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide mb-0.5">Secure Customer Data</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Your address details and service tickets are stored securely to assign local field engineers efficiently. We never share customer data.
+                </p>
+              </div>
+            </div>
+
           </div>
+
         </div>
+
       </div>
     </div>
   )

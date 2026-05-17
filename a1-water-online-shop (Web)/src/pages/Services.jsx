@@ -1,137 +1,127 @@
 import { Link } from 'react-router-dom'
-import PageHeader from '../components/PageHeader.jsx'
-import { Check, Calendar, ArrowRight, Shield, AlertCircle } from 'lucide-react'
+import { Check, ArrowRight, Shield, AlertCircle } from 'lucide-react'
 import { formatCurrency } from '../utils/format.js'
 import useServices from '../hooks/useServices.js'
+import { getServiceImage, handleImageError } from '../utils/imageUtils.js'
 
 export default function Services() {
   const { items: servicePlans, loading, error } = useServices()
 
   return (
-    <div className="container mx-auto px-4 py-12 max-w-7xl font-sans text-slate-900">
-      <PageHeader
-        eyebrow="Service-Led Experience"
-        title="Care plans and bookable service ideas"
-        subtitle="Lead customers with installation, repair, maintenance, and water-test bookings first, then guide product buying only when required."
-      />
+    <div className="page-bg">
+      <div className="container mx-auto px-4 max-w-7xl py-8">
 
-      {loading ? (
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8 animate-pulse">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-96 bg-slate-200 rounded-3xl"></div>
-          ))}
-        </div>
-      ) : error ? (
-        <div className="mt-12 rounded-3xl border border-red-200 bg-red-50 px-6 py-12 text-center">
-          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-          <h3 className="text-lg font-bold text-red-900 mb-2">Failed to load services</h3>
-          <p className="text-red-700">{error}</p>
-        </div>
-      ) : servicePlans.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-12">
-          {servicePlans.map((plan) => (
-            <div
-              key={plan.id}
-              className={`flex flex-col overflow-hidden bg-white rounded-3xl border shadow-sm transition-all hover:shadow-xl hover:-translate-y-1 ${plan.price > 4000 ? 'border-indigo-600 ring-4 ring-indigo-50' : 'border-slate-100'
-                }`}
-            >
-              <div className="relative aspect-[16/10] overflow-hidden bg-slate-100">
-                <img
-                  src={plan.imageUrl || '/sample-service.jpg'}
-                  alt={plan.name}
-                  onError={(event) => {
-                    event.currentTarget.onerror = null
-                    event.currentTarget.src = '/sample-service.jpg'
-                  }}
-                  className="h-full w-full object-cover transition-transform duration-700 hover:scale-105"
-                />
-                <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/55 to-transparent" />
-              </div>
-
-              <div className="flex flex-1 flex-col p-8">
-              <div className="flex items-center justify-between mb-6">
-                <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
-                  <Shield className="w-6 h-6" />
-                </div>
-                {plan.price > 4000 && (
-                  <span className="bg-indigo-600 text-white text-[10px] uppercase font-extrabold px-3 py-1 rounded-full tracking-widest">
-                    Most Popular
-                  </span>
-                )}
-              </div>
-
-              <h3 className="text-2xl font-bold text-slate-900 mb-2">{plan.name}</h3>
-              <p className="text-slate-500 text-sm mb-6 leading-relaxed grow">{plan.description}</p>
-
-              <div className="mb-8">
-                <div className="flex items-baseline gap-1">
-                  <span className="text-4xl font-extrabold text-slate-900">{formatCurrency(plan.price)}</span>
-                  <span className="text-slate-400 text-sm font-medium">/{plan.duration}</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-1 uppercase font-bold tracking-wide">Inclusive of all taxes</p>
-              </div>
-
-              <ul className="space-y-4 mb-8">
-                <li className="flex items-start gap-3 text-sm text-slate-700">
-                  <div className="mt-0.5 bg-green-50 text-green-600 rounded-full p-0.5"><Check className="w-3.5 h-3.5" /></div>
-                  <span>Quarterly health check-ups</span>
-                </li>
-                <li className="flex items-start gap-3 text-sm text-slate-700">
-                  <div className="mt-0.5 bg-green-50 text-green-600 rounded-full p-0.5"><Check className="w-3.5 h-3.5" /></div>
-                  <span>Priority installation within 24h</span>
-                </li>
-                <li className="flex items-start gap-3 text-sm text-slate-700">
-                  <div className="mt-0.5 bg-green-50 text-green-600 rounded-full p-0.5"><Check className="w-3.5 h-3.5" /></div>
-                  <span>Genuine filter replacements</span>
-                </li>
-              </ul>
-
-              <Link
-                to="/bookings"
-                className={`w-full py-4 rounded-xl font-bold text-lg text-center transition-all flex items-center justify-center gap-2 ${plan.price > 4000
-                    ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-200'
-                    : 'bg-slate-900 text-white hover:bg-slate-800'
-                  }`}
-              >
-                Get Started <ArrowRight className="w-5 h-5" />
-              </Link>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="mt-12 rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-slate-500">
-          No service plans available. Please add services in the admin panel.
-        </div>
-      )}
-
-      <div className="mt-20 bg-slate-50 rounded-3xl p-8 lg:p-16 flex flex-col lg:flex-row items-center gap-12 border border-slate-100">
-        <div className="lg:flex-1">
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">Service booking ideas to highlight</h2>
-          <p className="text-slate-600 text-lg mb-8 max-w-xl">
-            Put these journeys in front of visitors first: free water test requests, express installation, deep clean and sanitization, annual maintenance renewal, and emergency repair visits.
+        {/* Header */}
+        <div className="mb-8">
+          <p className="section-label mb-2">Certified Care</p>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Maintenance & Protection Plans</h1>
+          <p className="text-sm text-slate-500 max-w-xl">
+            Keep your water purifier running at peak performance with professional care plans backed by certified technicians.
           </p>
-          <div className="flex flex-wrap gap-4">
-            <Link to="/bookings" className="bg-white border border-slate-200 px-8 py-4 rounded-xl font-bold text-slate-700 hover:bg-slate-100 transition-all flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-indigo-600" /> Book a Slot
-            </Link>
-            <Link to="/contact" className="text-indigo-600 font-bold px-4 py-4 hover:underline">
-              Contact Support
-            </Link>
-          </div>
         </div>
-        <div className="hidden lg:block lg:w-1/3">
-          <div className="relative">
-            <div className="absolute inset-0 bg-indigo-600 rounded-3xl translate-x-4 translate-y-4 -z-10" />
-            <img
-              src="https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=400"
-              alt="Service Tech"
-              onError={(event) => {
-                event.currentTarget.onerror = null
-                event.currentTarget.src = '/sample-service.jpg'
-              }}
-              className="rounded-3xl shadow-xl w-full"
-            />
+
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="card aspect-[4/5] animate-pulse bg-slate-100" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="card p-10 text-center">
+            <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-3" />
+            <h3 className="font-semibold text-slate-800 mb-1">Could not load services</h3>
+            <p className="text-sm text-slate-500">{error}</p>
+          </div>
+        ) : servicePlans.length === 0 ? (
+          <div className="card p-10 text-center text-sm text-slate-400">
+            No service plans available. Please check back later.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
+            {servicePlans.map(plan => (
+              <div
+                key={plan.id}
+                className={`card flex flex-col overflow-hidden ${
+                  plan.price > 4000 ? 'ring-2 ring-indigo-600' : ''
+                }`}
+              >
+                {plan.price > 4000 && (
+                  <div className="bg-indigo-600 text-white text-center text-xs font-bold py-1.5 tracking-wide">
+                    MOST POPULAR
+                  </div>
+                )}
+                <div className="relative aspect-video overflow-hidden bg-slate-100">
+                  <img
+                    src={getServiceImage(plan)}
+                    alt={plan.name}
+                    onError={e => handleImageError(e, 'service')}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="p-5 flex flex-col flex-1">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="w-9 h-9 bg-indigo-50 rounded-lg flex items-center justify-center">
+                      <Shield className="w-4 h-4 text-indigo-600" />
+                    </div>
+                  </div>
+                  <h3 className="font-bold text-slate-900 mb-1">{plan.name}</h3>
+                  <p className="text-sm text-slate-500 mb-4 leading-relaxed flex-1">{plan.description}</p>
+
+                  <div className="mb-4">
+                    <div className="text-xl font-bold text-slate-900">
+                      {formatCurrency(plan.price)}
+                      <span className="text-sm font-normal text-slate-400 ml-1">/{plan.duration}</span>
+                    </div>
+                    <div className="text-xs text-slate-400 mt-0.5">Inclusive of all taxes</div>
+                  </div>
+
+                  <ul className="space-y-2 mb-5">
+                    {[
+                      'Quarterly health check-ups',
+                      'Priority 24hr installation',
+                      'Genuine filter replacements',
+                    ].map(item => (
+                      <li key={item} className="flex items-center gap-2 text-sm text-slate-600">
+                        <div className="w-4 h-4 bg-emerald-50 rounded-full flex items-center justify-center flex-shrink-0">
+                          <Check className="w-2.5 h-2.5 text-emerald-600" />
+                        </div>
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <Link
+                    to="/bookings"
+                    className={`flex items-center justify-center gap-2 py-2.5 rounded-lg font-semibold text-sm transition-colors ${
+                      plan.price > 4000
+                        ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        : 'bg-slate-900 text-white hover:bg-slate-800'
+                    }`}
+                    style={{ color: 'white' }}
+                  >
+                    Get Started <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* CTA */}
+        <div className="card p-6 lg:p-8 flex flex-col lg:flex-row items-start lg:items-center gap-6 justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900 mb-1">Need a one-time service visit?</h2>
+            <p className="text-sm text-slate-500">
+              Book a single technician visit for repairs, sanitization, water quality testing, or relocation.
+            </p>
+          </div>
+          <div className="flex gap-3 flex-shrink-0">
+            <Link to="/bookings" className="btn-primary px-5 py-2.5 text-sm">
+              Book a Visit
+            </Link>
+            <Link to="/contact" className="btn-secondary px-5 py-2.5 text-sm">
+              Contact Us
+            </Link>
           </div>
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import {
     CheckCircle,
     ShoppingBag,
@@ -19,22 +20,62 @@ import { formatCurrency } from '../utils/format'
 
 export default function OrderSuccess() {
     const { id } = useParams()
+    const { user } = useAuth()
     const navigate = useNavigate()
     const [copied, setCopied] = useState(false)
     const [orderDetails, setOrderDetails] = useState(null)
 
     useEffect(() => {
         window.scrollTo(0, 0)
-        // Try to get order details from sessionStorage
-        const savedOrder = sessionStorage.getItem('lastOrder')
+        
+        let active = true;
+        const fetchOrder = async () => {
+            if (!user?.uid || !id) return;
+            try {
+                const baseUrl = import.meta.env.VITE_API_BASE_URL;
+                if (!baseUrl) return;
+                
+                const res = await fetch(
+                    `${baseUrl}/orders/track?userId=${encodeURIComponent(user.uid)}&orderId=${encodeURIComponent(id)}`
+                );
+                
+                if (res.ok && active) {
+                    const data = await res.json();
+                    if (data.item) {
+                        setOrderDetails(data.item);
+                        // Save to session storage as fallback
+                        sessionStorage.setItem('lastOrder', JSON.stringify(data.item));
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch order:", err);
+            }
+        };
+
+        // Try to load from session storage instantly for immediate UI feedback
+        const savedOrder = sessionStorage.getItem('lastOrder');
         if (savedOrder) {
             try {
-                setOrderDetails(JSON.parse(savedOrder))
+                const parsed = JSON.parse(savedOrder);
+                if (parsed.orderId === id || parsed.id === id) {
+                    setOrderDetails(parsed);
+                }
             } catch {
-                setOrderDetails(null)
+                // Ignore parse error
             }
         }
-    }, [])
+
+        // Fetch immediately to ensure we have the absolute latest status
+        fetchOrder();
+
+        // Start 5-second polling loop for live status tracking
+        const interval = setInterval(fetchOrder, 5000);
+
+        return () => {
+            active = false;
+            clearInterval(interval);
+        };
+    }, [id, user?.uid])
 
     const copyOrderId = () => {
         navigator.clipboard.writeText(id)
@@ -59,12 +100,6 @@ export default function OrderSuccess() {
     ]
 
     const generateReceipt = () => {
-        const w = window.open('', '_blank');
-        if (!w) {
-            alert('Please allow popups to view the receipt.');
-            return;
-        }
-
         const items = orderDetails?.items || [];
         const subtotal = orderDetails?.subtotal || 0;
         const gstAmount = orderDetails?.gstAmount || 0;
@@ -73,7 +108,7 @@ export default function OrderSuccess() {
         const date = new Date().toLocaleDateString('en-IN');
         const address = orderDetails?.address || {};
 
-        w.document.write(`
+        const receiptHtml = `
           <!DOCTYPE html>
           <html>
           <head>
@@ -94,8 +129,6 @@ export default function OrderSuccess() {
               .summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; color: #64748b; }
               .summary-row.total { border-top: 2px solid #f1f5f9; margin-top: 10px; padding-top: 12px; color: #0f172a; font-weight: 800; font-size: 16px; }
               .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #94a3b8; }
-              @media print { .no-print { display: none !important; } }
-              .print-btn { background: #4f46e5; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; margin-top: 20px; }
             </style>
           </head>
           <body>
@@ -131,13 +164,34 @@ export default function OrderSuccess() {
               </div>
               <div class="footer">
                 <p>Thank you for shopping with A1 Water Tech!</p>
-                <button class="no-print print-btn" onclick="window.print();">Print Receipt</button>
               </div>
             </div>
           </body>
           </html>
-        `);
-        w.document.close();
+        `;
+
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'absolute';
+        iframe.style.width = '0px';
+        iframe.style.height = '0px';
+        iframe.style.border = 'none';
+        document.body.appendChild(iframe);
+
+        const doc = iframe.contentWindow.document;
+        doc.open();
+        doc.write(receiptHtml);
+        doc.close();
+
+        // Print once images/fonts load, or fallback to short delay
+        setTimeout(() => {
+            iframe.contentWindow.focus();
+            iframe.contentWindow.print();
+            
+            // Cleanup iframe after print dialog closes
+            setTimeout(() => {
+                document.body.removeChild(iframe);
+            }, 1000);
+        }, 500);
     }
 
     return (
@@ -279,10 +333,15 @@ export default function OrderSuccess() {
                                 </button>
                                 <button
                                     onClick={generateReceipt}
-                                    className="w-full bg-slate-800 text-white font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-3 hover:bg-slate-700"
+                                    disabled={!orderDetails}
+                                    className={`w-full font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-3 ${
+                                        orderDetails 
+                                            ? 'bg-slate-800 text-white hover:bg-slate-700' 
+                                            : 'bg-slate-800/50 text-white/50 cursor-not-allowed'
+                                    }`}
                                 >
                                     <Printer className="w-5 h-5" />
-                                    Print Receipt
+                                    {orderDetails ? 'Print Receipt' : 'Loading Invoice...'}
                                 </button>
                             </div>
                         </div>

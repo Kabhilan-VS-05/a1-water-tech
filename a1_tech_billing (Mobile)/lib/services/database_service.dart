@@ -243,6 +243,33 @@ class DatabaseService {
     }
   }
 
+  Future<void> updateLocalBillIdAndNumber(String oldId, String newId, String newBillNumber) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      // 1. Update bill ID, bill_number, and is_synced in 'bills' table
+      await txn.update(
+        'bills',
+        {
+          'id': newId,
+          'bill_number': newBillNumber,
+          'is_synced': 1,
+        },
+        where: 'id = ?',
+        whereArgs: [oldId],
+      );
+
+      // 2. Also update in the 'sync_queue' table if there are any remaining references
+      await txn.update(
+        'sync_queue',
+        {
+          'record_id': newId,
+        },
+        where: 'record_id = ? AND table_name = ?',
+        whereArgs: [oldId, 'bills'],
+      );
+    });
+  }
+
   Future<List<Bill>> getBills({
     String? status,
     String? dateFrom,

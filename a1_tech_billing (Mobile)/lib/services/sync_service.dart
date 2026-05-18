@@ -392,7 +392,28 @@ class SyncService {
       print('Upload response status: ${response.statusCode}');
       print('Upload response body: ${response.body}');
 
-      return response.statusCode == 200 || response.statusCode == 201;
+      final bool isSuccess = response.statusCode == 200 || response.statusCode == 201;
+
+      if (isSuccess && table == 'bills' && operation == 'insert') {
+        try {
+          final Map<String, dynamic> responseData = jsonDecode(response.body);
+          final serverItem = responseData['item'];
+          if (serverItem != null) {
+            final String newId = serverItem['id']?.toString() ?? '';
+            final String newBillNumber = serverItem['billNumber']?.toString() ?? '';
+            final String oldId = item['record_id']?.toString() ?? '';
+            
+            if (newId.isNotEmpty && newBillNumber.isNotEmpty && oldId.isNotEmpty) {
+              print('Updating local SQLite bill oldId: $oldId -> newId: $newId, newBillNumber: $newBillNumber');
+              await _db.updateLocalBillIdAndNumber(oldId, newId, newBillNumber);
+            }
+          }
+        } catch (e) {
+          print('Error updating local bill after upload: $e');
+        }
+      }
+
+      return isSuccess;
     } catch (e) {
       print('Upload error: $e');
       return false;

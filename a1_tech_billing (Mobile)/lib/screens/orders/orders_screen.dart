@@ -24,6 +24,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   List<Order> _orders = [];
   List<Booking> _bookings = [];
   bool _isLoading = true;
+  bool _isSyncing = false;
+  bool _isFirstLoad = true;
   String _selectedFilter = 'pending';
   String _selectedType = 'product'; // 'product' or 'service'
   Timer? _refreshTimer;
@@ -51,8 +53,8 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     });
     _loadOrders();
     
-    // Auto-refresh orders every 30 seconds while on this screen
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    // Auto-refresh orders every 10 seconds while on this screen
+    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       _backgroundSync();
     });
   }
@@ -83,17 +85,43 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   }
 
   Future<void> _manualSync() async {
-    await _sync.manualSync();
-    await _loadOrders();
+    if (_isSyncing) return;
+    setState(() {
+      _isSyncing = true;
+    });
+    try {
+      await _sync.syncOrdersOnly();
+    } catch (e) {
+      debugPrint('Manual sync error: $e');
+    }
+    await _refreshOrders();
+    if (mounted) {
+      setState(() {
+        _isSyncing = false;
+      });
+    }
   }
 
   Future<void> _backgroundSync() async {
+    final bool showLoader = _isFirstLoad;
+    if (showLoader && mounted) {
+      setState(() {
+        _isSyncing = true;
+        _isFirstLoad = false;
+      });
+    }
     try {
       // Use faster order-only sync
       await _sync.syncOrdersOnly();
       await _refreshOrders();
     } catch (e) {
       debugPrint('Background sync error: $e');
+    } finally {
+      if (showLoader && mounted) {
+        setState(() {
+          _isSyncing = false;
+        });
+      }
     }
   }
 
@@ -322,6 +350,12 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                if (_isSyncing)
+                  const LinearProgressIndicator(
+                    backgroundColor: Colors.transparent,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppTheme.accentColor),
+                    minHeight: 2.5,
+                  ),
                 _buildTypeSelector(),
                 Expanded(
                   child: RefreshIndicator(

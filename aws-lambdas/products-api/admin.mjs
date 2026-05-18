@@ -697,10 +697,19 @@ async function fetchAdminBills(getPool, limitValue) {
         id::text as id,
         bill_number as "billNumber",
         source,
+        source_order_doc_id as "sourceOrderDocId",
+        source_order_id as "sourceOrderId",
+        user_id as "userId",
         customer,
+        items,
+        subtotal,
+        billing,
         total,
         status,
-        created_at as "createdAt"
+        company_name as "companyName",
+        support_phone as "supportPhone",
+        created_at as "createdAt",
+        updated_at as "updatedAt"
       from bills
       order by created_at desc
       ${limit > 0 ? `limit ${Math.max(1, Math.min(limit, 200))}` : ''}

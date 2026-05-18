@@ -73,6 +73,12 @@ class AppProvider extends ChangeNotifier {
           setTabIndex(1, ordersTabIndex: 0);
         }
       });
+
+      // Handle cold boot from a killed state notification tap
+      if (NotificationService().initialPayload == 'orders') {
+        setTabIndex(1, ordersTabIndex: 0);
+        NotificationService().initialPayload = null; // Clear it so it only fires once
+      }
     } catch (e) {
       debugPrint("Initialization error: $e");
     } finally {

@@ -12,6 +12,8 @@ class NotificationService {
   final StreamController<String?> _onTapController = StreamController<String?>.broadcast();
   Stream<String?> get onTapStream => _onTapController.stream;
 
+  String? initialPayload;
+
   Future<void> initialize() async {
     if (_initialized) return;
 
@@ -28,6 +30,13 @@ class NotificationService {
         _onTapController.add(details.payload);
       },
     );
+
+    // Capture notification that launched the app from terminated state
+    final NotificationAppLaunchDetails? launchDetails = 
+        await _notificationsPlugin.getNotificationAppLaunchDetails();
+    if (launchDetails != null && launchDetails.didNotificationLaunchApp) {
+      initialPayload = launchDetails.notificationResponse?.payload;
+    }
     
     _initialized = true;
   }

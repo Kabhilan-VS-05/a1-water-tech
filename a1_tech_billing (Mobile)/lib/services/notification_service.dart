@@ -25,15 +25,16 @@ class NotificationService {
       },
     );
     
-    // Request runtime notification permission on Android 13+
+    _initialized = true;
+  }
+
+  Future<void> requestPermission() async {
     final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
         _notificationsPlugin.resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>();
     if (androidImplementation != null) {
       await androidImplementation.requestNotificationsPermission();
     }
-    
-    _initialized = true;
   }
 
   Future<void> showNotification({

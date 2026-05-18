@@ -46,6 +46,13 @@ class SyncService {
     _syncTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       syncIfOnline();
     });
+
+    // Start high-frequency check for new orders/bookings (every 15 seconds) to trigger instant notifications
+    Timer.periodic(const Duration(seconds: 15), (_) async {
+      if (_isOnline && !_isSyncing) {
+        await syncOrdersOnly();
+      }
+    });
   }
 
   // Check current connection

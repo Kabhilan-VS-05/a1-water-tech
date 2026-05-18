@@ -7,6 +7,8 @@ import '../services/sync_service.dart';
 import '../models/sync_result.dart';
 import '../theme/app_theme.dart';
 
+import '../services/notification_service.dart';
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -31,6 +33,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _loadData();
+    
+    // Request notification permission if not already done
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await NotificationService().requestPermission();
+    });
   }
 
   Future<void> _loadData() async {

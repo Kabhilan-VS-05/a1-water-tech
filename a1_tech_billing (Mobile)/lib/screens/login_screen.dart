@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../providers/app_provider.dart';
 import '../theme/app_theme.dart';
 
+import '../services/notification_service.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -21,7 +23,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final provider = Provider.of<AppProvider>(context, listen: false);
     final success = await provider.login(_emailController.text, _passwordController.text);
     
-    if (!success && mounted) {
+    if (success && mounted) {
+      await NotificationService().requestPermission();
+    } else if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Login failed. Please check credentials.'),

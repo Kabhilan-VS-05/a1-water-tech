@@ -13,12 +13,19 @@ import 'screens/settings/settings_screen.dart';
 import 'package:workmanager/workmanager.dart';
 import 'services/sync_service.dart';
 import 'services/notification_service.dart';
+import 'services/auth_service.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
       await NotificationService().initialize();
+      
+      // Initialize and restore auth session in the background isolate
+      final authService = AuthService();
+      await authService.initialize();
+      await authService.restoreSession();
+
       final syncService = SyncService();
       // Only do a quick check to avoid heavy DB ops if not needed
       await syncService.initialize();

@@ -49,6 +49,7 @@ class AppProvider extends ChangeNotifier {
     _setLoading(true);
     try {
       await _authService.initialize();
+      await _authService.restoreSession();
       await _syncService.initialize();
       
       // Load theme
@@ -64,8 +65,6 @@ class AppProvider extends ChangeNotifier {
         _pendingNotificationCount = count;
         notifyListeners();
       });
-
-      await _authService.restoreSession();
     } catch (e) {
       debugPrint("Initialization error: $e");
     } finally {
@@ -84,6 +83,8 @@ class AppProvider extends ChangeNotifier {
       final result = await _authService.signIn(username, password);
       _setLoading(false);
       if (result == AuthResult.success) {
+        // Trigger a background sync immediately so the database is populated
+        _syncService.syncAll();
         notifyListeners();
         return true;
       }

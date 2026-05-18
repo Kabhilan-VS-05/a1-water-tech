@@ -101,51 +101,65 @@ class SyncService {
     final results = <SyncResult>[];
 
     try {
-      // 1. Upload pending changes
-      final uploadResult = await _uploadPendingChanges();
-      print('Upload pending changes result: $uploadResult');
-      results.add(uploadResult);
+      final bool authenticated = _auth.isAuthenticated;
 
-      // 2. Download products
+      // 1. Upload pending changes (only if authenticated)
+      if (authenticated) {
+        final uploadResult = await _uploadPendingChanges();
+        print('Upload pending changes result: $uploadResult');
+        results.add(uploadResult);
+      }
+
+      // 2. Download products (public)
       final productsResult = await _syncProducts();
       print('Products sync result: $productsResult');
       results.add(productsResult);
 
-      // 3. Download services
+      // 3. Download services (public)
       final servicesResult = await _syncServices();
       print('Services sync result: $servicesResult');
       results.add(servicesResult);
 
-      // 4. Download customers
-      final customersResult = await _syncCustomers();
-      print('Customers sync result: $customersResult');
-      results.add(customersResult);
+      // 4. Download customers (authenticated)
+      if (authenticated) {
+        final customersResult = await _syncCustomers();
+        print('Customers sync result: $customersResult');
+        results.add(customersResult);
+      }
 
-      // 5. Download orders
-      final ordersResult = await _syncOrders();
-      print('Orders sync result: $ordersResult');
-      results.add(ordersResult);
+      // 5. Download orders (authenticated)
+      if (authenticated) {
+        final ordersResult = await _syncOrders();
+        print('Orders sync result: $ordersResult');
+        results.add(ordersResult);
+      }
 
-      // 6. Download bookings
-      final bookingsResult = await _syncBookings();
-      print('Bookings sync result: $bookingsResult');
-      results.add(bookingsResult);
+      // 6. Download bookings (authenticated)
+      if (authenticated) {
+        final bookingsResult = await _syncBookings();
+        print('Bookings sync result: $bookingsResult');
+        results.add(bookingsResult);
+      }
 
-      // 7. Download Bills
-      final billsResult = await _syncBills();
-      print('Bills sync result: $billsResult');
-      results.add(billsResult);
+      // 7. Download Bills (authenticated)
+      if (authenticated) {
+        final billsResult = await _syncBills();
+        print('Bills sync result: $billsResult');
+        results.add(billsResult);
+      }
 
-      // 8. Sync Settings
+      // 8. Sync Settings (public)
       await syncSettings();
 
-      // 6. Update Notification Stats
-      final metrics = await getRemoteMetrics();
-      final localStats = await _db.getDashboardStats();
-      
-      final pendingOrders = metrics?['pendingOrders'] ?? localStats['pendingOrders'] ?? 0;
-      final pendingBookings = metrics?['pendingBookings'] ?? localStats['pendingBookings'] ?? 0;
-      _notificationController.add(pendingOrders + pendingBookings);
+      // 9. Update Notification Stats (only if authenticated)
+      if (authenticated) {
+        final metrics = await getRemoteMetrics();
+        final localStats = await _db.getDashboardStats();
+        
+        final pendingOrders = metrics?['pendingOrders'] ?? localStats['pendingOrders'] ?? 0;
+        final pendingBookings = metrics?['pendingBookings'] ?? localStats['pendingBookings'] ?? 0;
+        _notificationController.add(pendingOrders + pendingBookings);
+      }
 
       _isSyncing = false;
 
@@ -155,7 +169,9 @@ class SyncService {
       );
 
       // Check if all succeeded
-      if (results.every((r) => r == SyncResult.success)) {
+      if (results.isEmpty) {
+        return SyncResult.success;
+      } else if (results.every((r) => r == SyncResult.success)) {
         print('Returning SyncResult.success');
         return SyncResult.success;
       } else if (results.contains(SyncResult.partial)) {
@@ -387,7 +403,7 @@ class SyncService {
   Future<SyncResult> _syncProducts() async {
     try {
       final lastSync = await _db.getSetting('last_products_sync');
-      final query = lastSync != null ? '?since=$lastSync' : '';
+      final query = lastSync != null ? '?since=${Uri.encodeComponent(lastSync)}' : '';
       print('Syncing products from: $_apiBaseUrl/products$query');
       final response = await http.get(Uri.parse('$_apiBaseUrl/products$query'));
       print('Products response status: ${response.statusCode}');
@@ -435,7 +451,7 @@ class SyncService {
   Future<SyncResult> _syncServices() async {
     try {
       final lastSync = await _db.getSetting('last_services_sync');
-      final query = lastSync != null ? '?since=$lastSync' : '';
+      final query = lastSync != null ? '?since=${Uri.encodeComponent(lastSync)}' : '';
       print('Syncing services from: $_apiBaseUrl/services$query');
       final response = await http.get(Uri.parse('$_apiBaseUrl/services$query'));
       print('Services response status: ${response.statusCode}');

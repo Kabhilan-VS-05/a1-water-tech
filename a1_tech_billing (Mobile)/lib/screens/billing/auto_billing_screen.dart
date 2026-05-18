@@ -5,7 +5,7 @@ import '../../models/models.dart';
 import '../../services/database_service.dart';
 import '../../services/sync_service.dart';
 import '../../services/pdf_service.dart';
-import '../../utils/image_helper.dart';
+import '../../theme/app_theme.dart';
 
 class AutoBillingScreen extends StatefulWidget {
   const AutoBillingScreen({super.key});
@@ -40,7 +40,7 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
     }
   }
 
-  Future<void> _generateBill() async {
+  Future<void> _generateBill(String paymentStatus, String paymentMode) async {
     if (_order == null) return;
 
     setState(() => _isGenerating = true);
@@ -49,9 +49,20 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
     final billNumber =
         'BILL-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.millisecondsSinceEpoch.toString().substring(7)}';
 
-    // Convert order items to bill items
-    final billItems = _order!.items.map((orderItem) {
-      return BillItem(
+    // Convert order items to bill items with the latest catalog images
+    final List<BillItem> billItems = [];
+    for (var orderItem in _order!.items) {
+      String? latestImageUrl = orderItem.imageUrl;
+      try {
+        final catalogItem = await _db.getCatalogItemById(orderItem.itemId);
+        if (catalogItem != null && catalogItem.imageUrl != null && catalogItem.imageUrl!.isNotEmpty) {
+          latestImageUrl = catalogItem.imageUrl;
+        }
+      } catch (e) {
+        debugPrint('Error getting catalog item image during billing: $e');
+      }
+
+      billItems.add(BillItem(
         itemId: orderItem.itemId,
         name: orderItem.name,
         type: orderItem.type,
@@ -60,9 +71,9 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
         gstPercent: orderItem.gstPercent,
         gstAmount: orderItem.gstAmount,
         total: orderItem.totalWithGst,
-        imageUrl: orderItem.imageUrl,
-      );
-    }).toList();
+        imageUrl: latestImageUrl,
+      ));
+    }
 
     final bill = Bill(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -74,8 +85,8 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
       subtotal: _order!.subtotal,
       gstAmount: _order!.gstAmount,
       total: _order!.total,
-      paymentMode: 'pending',
-      status: 'draft',
+      paymentMode: paymentMode,
+      status: paymentStatus,
       orderId: _order!.id,
       createdAt: now,
       updatedAt: now,
@@ -111,6 +122,140 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
     }
   }
 
+  Future<void> _showConfirmationAndGenerate() async {
+    String paymentStatus = 'paid';
+    String paymentMode = 'cash';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: Theme.of(context).cardColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.payment_rounded, color: const Color(0xFF4F46E5)),
+                const SizedBox(width: 10),
+                const Text('Payment Settlement', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Choose payment status and mode before generating the bill:', style: TextStyle(fontSize: 14)),
+                const SizedBox(height: 20),
+                
+                // Payment Status Toggle
+                const Text('Payment Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: paymentStatus == 'paid' ? Colors.green : Colors.transparent,
+                          foregroundColor: paymentStatus == 'paid' ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                          elevation: paymentStatus == 'paid' ? 2 : 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(color: paymentStatus == 'paid' ? Colors.green : Colors.grey.shade400),
+                          ),
+                        ),
+                        onPressed: () {
+                          setDialogState(() {
+                            paymentStatus = 'paid';
+                          });
+                        },
+                        child: const Text('PAID'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: paymentStatus == 'pending' ? Colors.amber.shade700 : Colors.transparent,
+                          foregroundColor: paymentStatus == 'pending' ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                          elevation: paymentStatus == 'pending' ? 2 : 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(color: paymentStatus == 'pending' ? Colors.amber.shade700 : Colors.grey.shade400),
+                          ),
+                        ),
+                        onPressed: () {
+                          setDialogState(() {
+                            paymentStatus = 'pending';
+                            paymentMode = 'pending';
+                          });
+                        },
+                        child: const Text('PENDING'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                
+                // Payment Mode Selector (Enabled only if PAID is selected)
+                if (paymentStatus == 'paid') ...[
+                  const Text('Payment Mode', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: paymentMode == 'pending' ? 'cash' : paymentMode,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
+                      ),
+                    ),
+                    items: ['cash', 'upi', 'card', 'bank_transfer'].map((mode) {
+                      return DropdownMenuItem(
+                        value: mode,
+                        child: Text(mode.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setDialogState(() {
+                          paymentMode = v;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _generateBill(paymentStatus, paymentMode);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4F46E5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('GENERATE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -137,7 +282,9 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
                 children: [
                   // Order Info Card
                   Card(
-                    color: Colors.blue.shade50,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF1E293B)
+                        : Colors.blue.shade50,
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -147,14 +294,18 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
                             children: [
                               Icon(
                                 Icons.shopping_bag,
-                                color: Colors.blue.shade700,
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.blue.shade300
+                                    : Colors.blue.shade700,
                               ),
                               const SizedBox(width: 8),
                               Text(
                                 'Order #${_order!.orderId ?? (_order!.id.length > 8 ? _order!.id.substring(0, 8).toUpperCase() : _order!.id.toUpperCase())}',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade700,
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.blue.shade300
+                                      : Colors.blue.shade700,
                                 ),
                               ),
                             ],
@@ -210,10 +361,10 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).cardColor,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.3 : 0.1),
                   blurRadius: 4,
                   offset: const Offset(0, -2),
                 ),
@@ -223,7 +374,7 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
               child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isGenerating ? null : _generateBill,
+                  onPressed: _isGenerating ? null : _showConfirmationAndGenerate,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4F46E5),
                     foregroundColor: Colors.white,
@@ -259,7 +410,13 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Colors.grey.shade600),
+          Icon(
+            icon,
+            size: 16,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.grey.shade400
+                : Colors.grey.shade600,
+          ),
           const SizedBox(width: 8),
           Text(text),
         ],
@@ -293,38 +450,68 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
   }
 }
 
-class _OrderItemCard extends StatelessWidget {
+class _OrderItemCard extends StatefulWidget {
   final OrderItem item;
 
   const _OrderItemCard({required this.item});
 
   @override
+  State<_OrderItemCard> createState() => _OrderItemCardState();
+}
+
+class _OrderItemCardState extends State<_OrderItemCard> {
+  final DatabaseService _db = DatabaseService();
+  String? _latestImageUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLatestImage();
+  }
+
+  Future<void> _loadLatestImage() async {
+    try {
+      final catalogItem = await _db.getCatalogItemById(widget.item.itemId);
+      if (catalogItem != null && catalogItem.imageUrl != null && catalogItem.imageUrl!.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _latestImageUrl = catalogItem.imageUrl;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading latest image in order card: $e');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final displayImageUrl = _latestImageUrl ?? widget.item.imageUrl;
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: item.type == 'product'
+          backgroundColor: widget.item.type == 'product'
               ? const Color(0xFFE0E7FF)
               : const Color(0xFFFEF3C7),
-          backgroundImage: ImageHelper.getImageProvider(item.imageUrl),
-          child: item.imageUrl != null && item.imageUrl!.isNotEmpty
+          backgroundImage: ImageHelper.getImageProvider(displayImageUrl),
+          child: displayImageUrl != null && displayImageUrl.isNotEmpty
               ? null
               : Icon(
-                  item.type == 'product' ? Icons.inventory : Icons.build,
-                  color: item.type == 'product' ? const Color(0xFF4F46E5) : const Color(0xFFD97706),
+                  widget.item.type == 'product' ? Icons.inventory : Icons.build,
+                  color: widget.item.type == 'product' ? const Color(0xFF4F46E5) : const Color(0xFFD97706),
                   size: 20,
                 ),
         ),
         title: Text(
-          item.name,
+          widget.item.name,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         ),
         subtitle: Text(
-          '${item.quantity} x Rs. ${item.price.toStringAsFixed(0)}',
+          '${widget.item.quantity} x Rs. ${widget.item.price.toStringAsFixed(0)}',
         ),
         trailing: Text(
-          'Rs. ${item.totalWithGst.toStringAsFixed(0)}',
+          'Rs. ${widget.item.totalWithGst.toStringAsFixed(0)}',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             color: const Color(0xFF4F46E5),

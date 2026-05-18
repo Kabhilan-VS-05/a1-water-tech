@@ -600,6 +600,12 @@ class DatabaseService {
     String? billId,
     bool isSync = false,
   }) async {
+    if (orderId.startsWith('ORDER-SVC-')) {
+      final bookingId = orderId.replaceFirst('ORDER-SVC-', '');
+      await updateBookingStatus(bookingId, status);
+      return;
+    }
+
     final db = await database;
 
     final Map<String, dynamic> updates = {'status': status};

@@ -13,72 +13,67 @@ class BillingDashboardScreen extends StatefulWidget {
 
 class _BillingDashboardScreenState extends State<BillingDashboardScreen> {
   final DatabaseService _db = DatabaseService();
-  int _billCount = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadStats();
-  }
-
-  Future<void> _loadStats() async {
+  Future<int> _fetchBillCount() async {
     final stats = await _db.getDashboardStats();
-    if (mounted) {
-      setState(() {
-        _billCount = stats['totalBills'] ?? 0;
-      });
-    }
+    return stats['totalBills'] ?? 0;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Billing Center', style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 8),
-            Text('Create and manage invoices', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).textTheme.bodySmall?.color)),
-            const SizedBox(height: 32),
-            
-            // Manual Billing Card
-            _BillingActionCard(
-              title: 'Create Manual Bill',
-              description: 'Generate an invoice for walk-in customers or custom orders.',
-              icon: Icons.receipt_rounded,
-              color: AppTheme.accentColor,
-              onTap: () => Navigator.pushNamed(context, '/billing/manual'),
+      body: FutureBuilder<int>(
+        future: _fetchBillCount(),
+        builder: (context, snapshot) {
+          final billCount = snapshot.data ?? 0;
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Billing Center', style: Theme.of(context).textTheme.headlineMedium),
+                const SizedBox(height: 8),
+                Text('Create and manage invoices', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).textTheme.bodySmall?.color)),
+                const SizedBox(height: 32),
+
+                // Manual Billing Card
+                _BillingActionCard(
+                  title: 'Create Manual Bill',
+                  description: 'Generate an invoice for walk-in customers or custom orders.',
+                  icon: Icons.receipt_rounded,
+                  color: AppTheme.accentColor,
+                  onTap: () => Navigator.pushNamed(context, '/billing/manual').then((_) => setState(() {})),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Generate from Orders Card
+                _BillingActionCard(
+                  title: 'Generate from Orders',
+                  description: 'Convert confirmed online orders directly into invoices.',
+                  icon: Icons.local_shipping_rounded,
+                  color: AppTheme.secondaryColor,
+                  onTap: () {
+                    context.read<AppProvider>().setTabIndex(1);
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Billing History Card
+                _BillingActionCard(
+                  title: 'Billing History',
+                  description: 'View, edit, print or share past invoices and receipts.',
+                  subtitle: 'Total Records: $billCount',
+                  icon: Icons.history_rounded,
+                  color: const Color(0xFF8B5CF6),
+                  onTap: () => Navigator.pushNamed(context, '/billing/history').then((_) => setState(() {})),
+                ),
+              ],
             ),
-            
-            const SizedBox(height: 16),
-            
-            // Generate from Orders Card
-            _BillingActionCard(
-              title: 'Generate from Orders',
-              description: 'Convert confirmed online orders directly into invoices.',
-              icon: Icons.local_shipping_rounded,
-              color: AppTheme.secondaryColor,
-              onTap: () {
-                context.read<AppProvider>().setTabIndex(1);
-              },
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // Billing History Card
-            _BillingActionCard(
-              title: 'Billing History',
-              description: 'View, edit, print or share past invoices and receipts.',
-              subtitle: 'Total Records: $_billCount',
-              icon: Icons.history_rounded,
-              color: const Color(0xFF8B5CF6), // Purple for history
-              onTap: () => Navigator.pushNamed(context, '/billing/history'),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

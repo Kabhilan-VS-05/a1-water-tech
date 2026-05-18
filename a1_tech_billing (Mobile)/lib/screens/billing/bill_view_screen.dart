@@ -16,7 +16,7 @@ class BillViewScreen extends StatefulWidget {
   const BillViewScreen({
     super.key,
     required this.billId,
-    this.isEditable = false,
+    this.isEditable = true,
   });
 
   @override
@@ -35,6 +35,7 @@ class _BillViewScreenState extends State<BillViewScreen> {
   final _customerPhoneController = TextEditingController();
   final _customerAddressController = TextEditingController();
   String _selectedPaymentMode = 'pending';
+  String _selectedStatus = 'draft';
   List<BillItem> _editableItems = [];
   double _subtotal = 0;
   double _gstAmount = 0;
@@ -65,6 +66,7 @@ class _BillViewScreenState extends State<BillViewScreen> {
       _customerPhoneController.text = bill.customerPhone ?? '';
       _customerAddressController.text = bill.customerAddress ?? '';
       _selectedPaymentMode = bill.paymentMode;
+      _selectedStatus = bill.status;
       _editableItems = List.from(bill.items);
       _calculateTotals();
     });
@@ -182,6 +184,7 @@ class _BillViewScreenState extends State<BillViewScreen> {
       subtotal: _subtotal,
       gstAmount: _gstAmount,
       total: _total,
+      status: _selectedStatus,
       paymentMode: _selectedPaymentMode,
       updatedAt: DateTime.now(),
     );
@@ -286,8 +289,9 @@ class _BillViewScreenState extends State<BillViewScreen> {
       return const Scaffold(body: Center(child: Text('Bill not found')));
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final primaryColor = const Color(0xFF4F46E5);
-    final surfaceColor = const Color(0xFFF8FAFC);
+    final surfaceColor = isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC);
 
     return Scaffold(
       backgroundColor: surfaceColor,
@@ -338,27 +342,89 @@ class _BillViewScreenState extends State<BillViewScreen> {
                   _buildSectionCard(
                     child: Column(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _buildBadge(
-                              _bill!.status.toUpperCase(),
-                              _getBillStatusColor(),
-                            ),
-                            _buildBadge(
-                              _bill!.paymentMode.toUpperCase(),
-                              primaryColor,
-                              isOutline: true,
-                            ),
-                          ],
-                        ),
+                        if (_isEditing) ...[
+                          Column(
+                            children: [
+                              DropdownButtonFormField<String>(
+                                value: _selectedStatus,
+                                isExpanded: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Status',
+                                  fillColor: isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
+                                  filled: true,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                ),
+                                items: ['draft', 'pending', 'confirmed', 'paid', 'cancelled'].map((status) {
+                                  return DropdownMenuItem(
+                                    value: status,
+                                    child: Text(status.toUpperCase(), overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: _getStatusColorForString(status))),
+                                  );
+                                }).toList(),
+                                onChanged: (v) {
+                                  if (v != null) setState(() => _selectedStatus = v);
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              DropdownButtonFormField<String>(
+                                value: _selectedPaymentMode,
+                                isExpanded: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Payment Mode',
+                                  fillColor: isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
+                                  filled: true,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                ),
+                                items: ['pending', 'cash', 'upi', 'card', 'bank_transfer'].map((mode) {
+                                  return DropdownMenuItem(
+                                    value: mode,
+                                    child: Text(mode.replaceAll('_', ' ').toUpperCase(), overflow: TextOverflow.ellipsis, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: primaryColor)),
+                                  );
+                                }).toList(),
+                                onChanged: (v) {
+                                  if (v != null) setState(() => _selectedPaymentMode = v);
+                                },
+                              ),
+                            ],
+                          ),
+                        ] else ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _buildBadge(
+                                _bill!.status.toUpperCase(),
+                                _getBillStatusColor(),
+                              ),
+                              _buildBadge(
+                                _bill!.paymentMode.toUpperCase(),
+                                primaryColor,
+                                isOutline: true,
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 20),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
                           children: [
-                            _buildStatItem('Items', '${_bill!.items.length}'),
-                            _buildStatItem('Subtotal', '₹${_bill!.subtotal.toStringAsFixed(0)}'),
-                            _buildStatItem('Tax', '₹${_bill!.gstAmount.toStringAsFixed(0)}'),
+                            _buildStatItem('Items', '${_isEditing ? _editableItems.length : _bill!.items.length}'),
+                            _buildStatItem('Subtotal', '₹${(_isEditing ? _subtotal : _bill!.subtotal).toStringAsFixed(0)}'),
+                            _buildStatItem('Tax', '₹${(_isEditing ? _gstAmount : _bill!.gstAmount).toStringAsFixed(0)}'),
                           ],
                         ),
                       ],
@@ -435,9 +501,9 @@ class _BillViewScreenState extends State<BillViewScreen> {
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).cardColor,
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -5)),
+                BoxShadow(color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.4 : 0.05), blurRadius: 10, offset: const Offset(0, -5)),
               ],
             ),
             child: Row(
@@ -505,7 +571,7 @@ class _BillViewScreenState extends State<BillViewScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
@@ -536,19 +602,23 @@ class _BillViewScreenState extends State<BillViewScreen> {
       children: [
         Text(label, style: TextStyle(color: AppTheme.slate.shade400, fontSize: 11, fontWeight: FontWeight.w500)),
         const SizedBox(height: 4),
-        Text(value, style: const TextStyle(color: AppTheme.slate, fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(value, style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color, fontSize: 16, fontWeight: FontWeight.bold)),
       ],
     );
   }
 
   Widget _buildInfoDetail(String label, String value, IconData icon) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(10)),
-          child: Icon(icon, size: 16, color: const Color(0xFF64748B)),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.slate.withOpacity(0.2) : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 16, color: isDark ? Colors.blue.shade300 : const Color(0xFF64748B)),
         ),
         const SizedBox(width: 16),
         Expanded(
@@ -557,7 +627,7 @@ class _BillViewScreenState extends State<BillViewScreen> {
             children: [
               Text(label, style: TextStyle(color: AppTheme.slate.shade400, fontSize: 11, fontWeight: FontWeight.w600)),
               const SizedBox(height: 2),
-              Text(value, style: const TextStyle(color: AppTheme.slate, fontSize: 14, fontWeight: FontWeight.w600)),
+              Text(value, style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color, fontSize: 14, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -566,13 +636,14 @@ class _BillViewScreenState extends State<BillViewScreen> {
   }
 
   Widget _buildItemTile(BillItem item, int index) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.slate.withOpacity(0.05)),
+        border: Border.all(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.withOpacity(0.05)),
       ),
       child: Row(
         children: [
@@ -580,13 +651,13 @@ class _BillViewScreenState extends State<BillViewScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFFEEF2FF),
+              color: isDark ? const Color(0xFFEEF2FF).withOpacity(0.1) : const Color(0xFFEEF2FF),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
               child: Text(
                 '${index + 1}',
-                style: const TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold),
+                style: TextStyle(color: isDark ? Colors.blue.shade300 : const Color(0xFF4F46E5), fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -595,7 +666,7 @@ class _BillViewScreenState extends State<BillViewScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: AppTheme.slate)),
+                Text(item.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Theme.of(context).textTheme.bodyLarge?.color)),
                 const SizedBox(height: 2),
                 Text(
                   '${item.quantity} x ₹${item.price.toStringAsFixed(0)}',
@@ -634,33 +705,55 @@ class _BillViewScreenState extends State<BillViewScreen> {
   }
 
   Widget _buildQtyBtn(IconData icon, VoidCallback onPressed) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return GestureDetector(
       onTap: onPressed,
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: AppTheme.slate.shade50,
+          color: isDark ? AppTheme.slate.shade800 : AppTheme.slate.shade50,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppTheme.slate.shade200),
+          border: Border.all(color: isDark ? AppTheme.slate.shade700 : AppTheme.slate.shade200),
         ),
-        child: Icon(icon, size: 16, color: AppTheme.slate.shade700),
+        child: Icon(icon, size: 16, color: isDark ? Colors.white70 : AppTheme.slate.shade700),
       ),
     );
   }
 
+  Color _getStatusColorForString(String status) {
+    switch (status.toLowerCase()) {
+      case 'draft': return Colors.orange;
+      case 'pending': return Colors.amber.shade700;
+      case 'confirmed': return Colors.blue;
+      case 'paid': return Colors.green;
+      case 'cancelled': return Colors.red;
+      default: return Colors.grey;
+    }
+  }
+
   Widget _buildTextField(TextEditingController controller, {required String label, int maxLines = 1, TextInputType? keyboardType}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return TextField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: AppTheme.slate.shade500, fontSize: 13),
+        labelStyle: TextStyle(color: isDark ? AppTheme.slate.shade400 : AppTheme.slate.shade500, fontSize: 13),
         filled: true,
-        fillColor: const Color(0xFFF8FAFC),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppTheme.slate.shade200)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppTheme.slate.shade200)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: Color(0xFF4F46E5))),
+        fillColor: isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: isDark ? Colors.blue.shade400 : const Color(0xFF4F46E5)),
+        ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );

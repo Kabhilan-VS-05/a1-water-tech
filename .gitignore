@@ -1,0 +1,51 @@
+# ============================================================
+# ROOT .gitignore — A1 Water Tech Monorepo
+# ============================================================
+
+# ── Build artifacts & release bundles ────────────────────────
+*.apk
+*.aab
+*.ipa
+*.zip
+*.tar
+*.tar.gz
+*.gz
+
+# ── Temporary / scratch directories ──────────────────────────
+temp_check_zip/
+temp/
+tmp/
+
+# ── IDE & editor configs ──────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# ── OS files ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ── Secrets / credentials (NEVER commit) ─────────────────────
+*.env
+.env.*
+!.env.example
+*-firebase-adminsdk-*.json
+*serviceAccountKey*.json
+*.pem
+*.p12
+*.keystore
+*.jks
+
+# ── One-off data dumps ────────────────────────────────────────
+orders_dump.json

@@ -47,25 +47,30 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> initialize() async {
     _setLoading(true);
-    await _authService.initialize();
-    await _syncService.initialize();
-    
-    // Load theme
-    final savedTheme = await _db.getSetting('themeMode');
-    if (savedTheme != null) {
-      if (savedTheme == 'ThemeMode.light') _themeMode = ThemeMode.light;
-      if (savedTheme == 'ThemeMode.dark') _themeMode = ThemeMode.dark;
-      if (savedTheme == 'ThemeMode.system') _themeMode = ThemeMode.system;
+    try {
+      await _authService.initialize();
+      await _syncService.initialize();
+      
+      // Load theme
+      final savedTheme = await _db.getSetting('themeMode');
+      if (savedTheme != null) {
+        if (savedTheme == 'ThemeMode.light') _themeMode = ThemeMode.light;
+        if (savedTheme == 'ThemeMode.dark') _themeMode = ThemeMode.dark;
+        if (savedTheme == 'ThemeMode.system') _themeMode = ThemeMode.system;
+      }
+
+      // Listen for notifications
+      _syncService.notificationStream.listen((count) {
+        _pendingNotificationCount = count;
+        notifyListeners();
+      });
+
+      await _authService.restoreSession();
+    } catch (e) {
+      debugPrint("Initialization error: $e");
+    } finally {
+      _setLoading(false);
     }
-
-    // Listen for notifications
-    _syncService.notificationStream.listen((count) {
-      _pendingNotificationCount = count;
-      notifyListeners();
-    });
-
-    await _authService.restoreSession();
-    _setLoading(false);
   }
 
   void _setLoading(bool value) {

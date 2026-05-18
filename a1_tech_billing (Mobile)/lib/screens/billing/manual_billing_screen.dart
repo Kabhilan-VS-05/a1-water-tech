@@ -126,7 +126,7 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
   double get _taxTotal => _cart.fold(0, (sum, item) => sum + item.gstAmount);
   double get _total => _subtotal + _taxTotal;
 
-  Future<void> _generateBill() async {
+  Future<void> _generateBill(String paymentStatus, String paymentMode) async {
     if (_cart.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cart is empty')));
       return;
@@ -147,8 +147,8 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
       gstAmount: _taxTotal,
       total: _total,
       items: _cart,
-      status: 'paid',
-      paymentMode: 'cash',
+      status: paymentStatus,
+      paymentMode: paymentMode,
       createdAt: now,
       updatedAt: now,
     );
@@ -167,6 +167,149 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
     }
   }
 
+  Future<void> _showConfirmationAndGenerate() async {
+    if (_cart.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cart is empty')));
+      return;
+    }
+    if (_selectedCustomer == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a customer')));
+      return;
+    }
+
+    String paymentStatus = 'paid';
+    String paymentMode = 'cash';
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            backgroundColor: Theme.of(context).cardColor,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.payment_rounded, color: AppTheme.accentColor),
+                const SizedBox(width: 10),
+                const Text('Payment Settlement', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Choose payment status and mode before generating the bill:', style: TextStyle(fontSize: 14)),
+                const SizedBox(height: 20),
+                
+                // Payment Status Toggle
+                const Text('Payment Status', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: paymentStatus == 'paid' ? Colors.green : Colors.transparent,
+                          foregroundColor: paymentStatus == 'paid' ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                          elevation: paymentStatus == 'paid' ? 2 : 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(color: paymentStatus == 'paid' ? Colors.green : Colors.grey.shade400),
+                          ),
+                        ),
+                        onPressed: () {
+                          setDialogState(() {
+                            paymentStatus = 'paid';
+                          });
+                        },
+                        child: const Text('PAID'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: paymentStatus == 'pending' ? Colors.amber.shade700 : Colors.transparent,
+                          foregroundColor: paymentStatus == 'pending' ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                          elevation: paymentStatus == 'pending' ? 2 : 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(color: paymentStatus == 'pending' ? Colors.amber.shade700 : Colors.grey.shade400),
+                          ),
+                        ),
+                        onPressed: () {
+                          setDialogState(() {
+                            paymentStatus = 'pending';
+                            paymentMode = 'pending';
+                          });
+                        },
+                        child: const Text('PENDING'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                
+                // Payment Mode Selector (Enabled only if PAID is selected)
+                if (paymentStatus == 'paid') ...[
+                  const Text('Payment Mode', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    value: paymentMode == 'pending' ? 'cash' : paymentMode,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
+                      ),
+                    ),
+                    items: ['cash', 'upi', 'card', 'bank_transfer'].map((mode) {
+                      return DropdownMenuItem(
+                        value: mode,
+                        child: Text(mode.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                      );
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) {
+                        setDialogState(() {
+                          paymentMode = v;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('CANCEL', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _generateBill(paymentStatus, paymentMode);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryColor,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('GENERATE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Future<void> _selectCustomer() async {
     final customers = await _db.getCustomers();
     if (!mounted) return;
@@ -177,9 +320,9 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.7,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         ),
         child: Column(
           children: [
@@ -187,7 +330,7 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
               margin: const EdgeInsets.symmetric(vertical: 12),
               width: 40,
               height: 4,
-              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(color: Theme.of(context).dividerColor, borderRadius: BorderRadius.circular(2)),
             ),
             const Text('Select Customer', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
@@ -304,7 +447,7 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
           hintText: 'Search products or services...',
           prefixIcon: const Icon(Icons.search),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: Theme.of(context).cardColor,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
           contentPadding: const EdgeInsets.symmetric(vertical: 0),
         ),
@@ -321,9 +464,9 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.2 : 0.02), blurRadius: 10, offset: const Offset(0, 4))],
           ),
           child: ListTile(
             contentPadding: const EdgeInsets.all(12),
@@ -391,7 +534,7 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
         margin: const EdgeInsets.all(20),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: AppTheme.accentColor.withOpacity(0.2)),
         ),
@@ -407,7 +550,7 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('CUSTOMER DETAILS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey)),
+                  Text('CUSTOMER DETAILS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7))),
                   const SizedBox(height: 4),
                   Text(_selectedCustomer?.name ?? 'Select Customer', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                   if (_selectedCustomer != null) Text(_selectedCustomer!.phone ?? ''),
@@ -472,10 +615,10 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
   Widget _buildFinalSummary() {
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 20)],
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.4 : 0.12), blurRadius: 20)],
       ),
       child: SafeArea(
         child: Column(
@@ -497,7 +640,7 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
-                onPressed: _cart.isEmpty || _selectedCustomer == null ? null : _generateBill,
+                onPressed: _cart.isEmpty || _selectedCustomer == null ? null : _showConfirmationAndGenerate,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryColor,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -515,8 +658,8 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> with SingleTi
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.grey, fontWeight: FontWeight.w500)),
-        Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, color: isTax ? Colors.green : null)),
+        Text(label, style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color, fontWeight: FontWeight.w500)),
+        Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.bold, color: isTax ? AppTheme.secondaryColor : null)),
       ],
     );
   }

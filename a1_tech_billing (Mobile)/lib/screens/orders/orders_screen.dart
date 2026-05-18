@@ -204,6 +204,85 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
     Navigator.pushNamed(context, '/billing/auto', arguments: order);
   }
 
+  Future<void> _generateBillFromBooking(Booking booking) async {
+    // Show a loading dialog during conversion
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
+
+    try {
+      // 1. Fetch catalog items of type 'service' to find the price
+      final services = await _db.getCatalogItems(type: 'service');
+      
+      // Find the matching service item
+      CatalogItem? matchedService;
+      for (var service in services) {
+        if (service.name.toLowerCase() == booking.serviceType.toLowerCase()) {
+          matchedService = service;
+          break;
+        }
+      }
+      
+      // Default fallback if not found in catalog
+      final itemId = matchedService?.id ?? 'SVC-GEN';
+      final serviceName = matchedService?.name ?? booking.serviceType;
+      final price = matchedService?.price ?? 299.0; // Fallback price
+      final gstPercent = matchedService?.gstPercent ?? 18.0;
+      final imageUrl = matchedService?.imageUrl;
+
+      final double totalWithoutGst = price * 1;
+      final double gstAmount = (totalWithoutGst * gstPercent) / 100;
+      final double totalWithGst = totalWithoutGst + gstAmount;
+
+      final orderItem = OrderItem(
+        itemId: itemId,
+        name: serviceName,
+        type: 'service',
+        price: price,
+        quantity: 1,
+        gstPercent: gstPercent,
+        imageUrl: imageUrl,
+      );
+
+      final order = Order(
+        id: 'ORDER-SVC-${booking.id}',
+        orderId: 'SVC-${booking.id.length > 6 ? booking.id.substring(0, 6).toUpperCase() : booking.id.toUpperCase()}',
+        customerName: booking.name,
+        customerPhone: booking.phone,
+        customerAddress: booking.address,
+        items: [orderItem],
+        subtotal: totalWithoutGst,
+        gstAmount: gstAmount,
+        total: totalWithGst,
+        status: 'confirmed',
+        orderDate: booking.date ?? booking.createdAt,
+      );
+
+      // Pop loading dialog
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        Navigator.pushNamed(context, '/billing/auto', arguments: order).then((_) {
+          // Reload orders/bookings in case they were completed
+          _loadOrders();
+        });
+      }
+    } catch (e) {
+      // Pop loading dialog
+      if (mounted) Navigator.pop(context);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating bill: $e'), backgroundColor: AppTheme.errorColor),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final appProvider = context.watch<AppProvider>();
@@ -267,6 +346,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
                                   booking: item,
                                   onConfirm: () => _updateBookingStatus(item, 'confirmed'),
                                   onReject: () => _updateBookingStatus(item, 'rejected'),
+                                  onGenerateBill: () => _generateBillFromBooking(item),
                                 );
                               }
                               return const SizedBox.shrink();
@@ -408,7 +488,6 @@ class _PremiumOrderCardState extends State<_PremiumOrderCard> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.dividerColorLight),
         boxShadow: [
           BoxShadow(
             color: AppTheme.primaryColor.withOpacity(0.03),
@@ -535,12 +614,14 @@ class _PremiumOrderCardState extends State<_PremiumOrderCard> {
                                 ),
                               ],
                             ),
-                          ] else if (widget.order.status == 'confirmed') ...[
+                          ] else if (widget.order.status == 'confirmed' || widget.order.status == 'completed') ...[
                             ElevatedButton.icon(
                               onPressed: widget.onGenerateBill,
                               icon: const Icon(Icons.receipt_long_rounded, size: 18),
-                              label: const Text('Generate Bill'),
-                              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentColor),
+                              label: Text(widget.order.status == 'completed' ? 'Regenerate Bill' : 'Generate Bill'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: widget.order.status == 'completed' ? Colors.grey.shade700 : AppTheme.accentColor,
+                              ),
                             ),
                           ]
                         ],
@@ -571,11 +652,13 @@ class _PremiumBookingCard extends StatefulWidget {
   final Booking booking;
   final VoidCallback onConfirm;
   final VoidCallback onReject;
+  final VoidCallback onGenerateBill;
 
   const _PremiumBookingCard({
     required this.booking,
     required this.onConfirm,
     required this.onReject,
+    required this.onGenerateBill,
   });
 
   @override
@@ -730,18 +813,16 @@ class _PremiumBookingCardState extends State<_PremiumBookingCard> {
                     ),
                   ],
                 )
-              else if (widget.booking.status == 'confirmed')
+              else if (widget.booking.status == 'confirmed' || widget.booking.status == 'completed')
                 Row(
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () {
-                          // TODO: Implement booking to bill conversion
-                        },
+                        onPressed: widget.onGenerateBill,
                         icon: const Icon(Icons.receipt_long, size: 18),
-                        label: const Text('Generate Bill'),
+                        label: Text(widget.booking.status == 'completed' ? 'Regenerate Bill' : 'Generate Bill'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.accentColor,
+                          backgroundColor: widget.booking.status == 'completed' ? Colors.grey.shade700 : AppTheme.accentColor,
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),

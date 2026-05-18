@@ -32,22 +32,27 @@ void callbackDispatcher() {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService().initialize();
   
-  Workmanager().initialize(
-    callbackDispatcher,
-    isInDebugMode: false,
-  );
-  
-  // Register background task to run every 15 minutes
-  Workmanager().registerPeriodicTask(
-    "1",
-    "backgroundSyncTask",
-    frequency: const Duration(minutes: 15),
-    constraints: Constraints(
-      networkType: NetworkType.connected,
-    ),
-  );
+  try {
+    await NotificationService().initialize();
+    
+    Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: false,
+    );
+    
+    // Register background task to run every 15 minutes
+    Workmanager().registerPeriodicTask(
+      "1",
+      "backgroundSyncTask",
+      frequency: const Duration(minutes: 15),
+      constraints: Constraints(
+        networkType: NetworkType.connected,
+      ),
+    );
+  } catch (e) {
+    debugPrint("Failed to initialize background services: $e");
+  }
   
   runApp(const A1BillingApp());
 }

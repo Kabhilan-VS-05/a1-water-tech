@@ -254,7 +254,6 @@ class _PremiumCatalogCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.dividerColorLight),
         boxShadow: [
           BoxShadow(
             color: AppTheme.primaryColor.withOpacity(0.04),
@@ -528,7 +527,6 @@ class _AddItemDialogState extends State<_AddItemDialog> {
                     decoration: BoxDecoration(
                       color: Theme.of(context).scaffoldBackgroundColor,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppTheme.dividerColorLight),
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: _isUploadingImage

@@ -153,7 +153,6 @@ class _CustomersScreenState extends State<CustomersScreen> with SingleTickerProv
                 decoration: BoxDecoration(
                   color: Theme.of(context).scaffoldBackgroundColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppTheme.dividerColorLight),
                 ),
                 child: TextField(
                   controller: _searchController,
@@ -256,7 +255,6 @@ class _PremiumCustomerCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppTheme.dividerColorLight),
           boxShadow: [
             BoxShadow(
               color: AppTheme.primaryColor.withOpacity(0.02),
@@ -428,9 +426,9 @@ class _CustomerDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
         child: Column(

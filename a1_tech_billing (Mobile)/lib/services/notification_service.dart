@@ -17,8 +17,9 @@ class NotificationService {
   Future<void> initialize() async {
     if (_initialized) return;
 
+    // VERY IMPORTANT: The icon must perfectly match the one in AndroidManifest.xml
     const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/launcher_icon');
 
     const InitializationSettings initializationSettings = InitializationSettings(
       android: initializationSettingsAndroid,
@@ -30,6 +31,24 @@ class NotificationService {
         _onTapController.add(details.payload);
       },
     );
+
+    // CRITICAL FOR ANDROID 13/14/15: Explicitly create the channel so it registers properly with the OS
+    final AndroidFlutterLocalNotificationsPlugin? androidImplementation =
+        _notificationsPlugin.resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+
+    if (androidImplementation != null) {
+      await androidImplementation.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'a1_water_tech_channel',
+          'A1 Water Tech Notifications',
+          description: 'Notifications for new orders and bookings',
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+        ),
+      );
+    }
 
     // Capture notification that launched the app from terminated state
     final NotificationAppLaunchDetails? launchDetails = 
@@ -58,6 +77,10 @@ class NotificationService {
   }) async {
     if (!_initialized) await initialize();
 
+    // CRITICAL: Android requires a positive 32-bit integer for notification IDs.
+    // Dart's hashCode can sometimes be negative or exceed 32-bits, causing silent failures!
+    final int safeId = id.abs() & 0x7FFFFFFF;
+
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'a1_water_tech_channel',
       'A1 Water Tech Notifications',
@@ -65,6 +88,8 @@ class NotificationService {
       importance: Importance.max,
       priority: Priority.high,
       ticker: 'ticker',
+      playSound: true,
+      enableVibration: true,
     );
 
     const NotificationDetails platformDetails = NotificationDetails(
@@ -72,7 +97,7 @@ class NotificationService {
     );
 
     await _notificationsPlugin.show(
-      id,
+      safeId,
       title,
       body,
       platformDetails,

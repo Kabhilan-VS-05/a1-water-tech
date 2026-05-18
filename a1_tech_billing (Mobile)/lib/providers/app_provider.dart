@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 import '../services/sync_service.dart';
 import '../services/database_service.dart';
+import '../services/notification_service.dart';
 
 class AppProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -64,6 +65,13 @@ class AppProvider extends ChangeNotifier {
       _syncService.notificationStream.listen((count) {
         _pendingNotificationCount = count;
         notifyListeners();
+      });
+
+      // Listen for notification taps to switch to Online Orders tab
+      NotificationService().onTapStream.listen((payload) {
+        if (payload == 'orders') {
+          setTabIndex(1, ordersTabIndex: 0);
+        }
       });
     } catch (e) {
       debugPrint("Initialization error: $e");

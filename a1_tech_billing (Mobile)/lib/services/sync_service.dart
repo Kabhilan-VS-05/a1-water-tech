@@ -634,6 +634,7 @@ class SyncService {
               id: order.id.hashCode,
               title: 'New Online Order!',
               body: 'You have received a new product order from ${order.customerName}.',
+              payload: 'orders',
             );
           }
 
@@ -743,6 +744,7 @@ class SyncService {
                 id: booking.id.hashCode,
                 title: 'New Service Booking!',
                 body: '${booking.name} requested a ${booking.serviceType} service.',
+                payload: 'orders',
               );
             }
 

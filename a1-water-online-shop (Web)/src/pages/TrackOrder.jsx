@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Loader2, Package, CheckCircle, Clock, Truck, ChevronRight } from 'lucide-react'
 import { useAuth } from '../state/AuthContext.jsx'
 
@@ -22,6 +22,35 @@ export default function TrackOrder() {
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Poll order status every 5 seconds for instant updates from admin changes
+  useEffect(() => {
+    if (!order || !user || ['delivered', 'cancelled', 'rejected'].includes(order.status?.toLowerCase())) return
+
+    let active = true
+    const interval = setInterval(async () => {
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL
+        if (!baseUrl) return
+        const res = await fetch(
+          `${baseUrl}/orders/track?userId=${encodeURIComponent(user.uid)}&orderId=${encodeURIComponent(order.orderId || order.id)}`
+        )
+        if (res.ok && active) {
+          const data = await res.json()
+          if (data.item) {
+            setOrder(data.item)
+          }
+        }
+      } catch (err) {
+        console.error('Polling track order error:', err)
+      }
+    }, 5000)
+
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [order?.status, order?.orderId, order?.id, user])
 
   const handleTrack = async (e) => {
     e.preventDefault()

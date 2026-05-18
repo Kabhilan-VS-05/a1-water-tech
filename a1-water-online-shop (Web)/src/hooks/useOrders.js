@@ -49,12 +49,13 @@ export default function useOrders(userId, refreshKey = 0) {
           setLoading(false)
         }
       }
-    }
-
     loadOrders()
+
+    const interval = setInterval(loadOrders, 5000)
 
     return () => {
       active = false
+      clearInterval(interval)
     }
   }, [userId, refreshKey])
 

@@ -49,12 +49,13 @@ export default function useBookings(userId, refreshKey = 0) {
           setLoading(false)
         }
       }
-    }
-
     loadBookings()
+
+    const interval = setInterval(loadBookings, 5000)
 
     return () => {
       active = false
+      clearInterval(interval)
     }
   }, [refreshKey, userId])
 

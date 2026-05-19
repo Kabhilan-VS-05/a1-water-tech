@@ -20,6 +20,17 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
   List<Bill> _bills = [];
   bool _isLoading = true;
 
+  // Search & Filter state
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+  DateTimeRange? _selectedDateRange;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -48,7 +59,7 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
   }
 
   Future<void> _manualSync() async {
-    await _sync.manualSync();
+    await _sync.forceSyncAllBillsToCloud();
     await _loadBills();
   }
 
@@ -61,6 +72,197 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
     );
   }
 
+  List<Bill> get _filteredBills {
+    List<Bill> list = List.from(_bills);
+    
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      list = list.where((b) {
+        final matchesBasic = b.id.toLowerCase().contains(query) ||
+            b.billNumber.toLowerCase().contains(query) ||
+            b.customerName.toLowerCase().contains(query) ||
+            (b.customerPhone?.toLowerCase().contains(query) ?? false) ||
+            (b.customerAddress?.toLowerCase().contains(query) ?? false) ||
+            b.paymentMode.toLowerCase().contains(query) ||
+            b.status.toLowerCase().contains(query);
+            
+        final matchesItems = b.items.any((item) =>
+            item.itemId.toLowerCase().contains(query) ||
+            item.name.toLowerCase().contains(query) ||
+            item.type.toLowerCase().contains(query));
+            
+        return matchesBasic || matchesItems;
+      }).toList();
+    }
+    
+    if (_selectedDateRange != null) {
+      list = list.where((b) {
+        final start = DateTime(_selectedDateRange!.start.year, _selectedDateRange!.start.month, _selectedDateRange!.start.day);
+        final end = DateTime(_selectedDateRange!.end.year, _selectedDateRange!.end.month, _selectedDateRange!.end.day, 23, 59, 59);
+        return b.createdAt.isAfter(start.subtract(const Duration(seconds: 1))) && b.createdAt.isBefore(end.add(const Duration(seconds: 1)));
+      }).toList();
+    }
+    
+    list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return list;
+  }
+
+  Widget _buildSearchAndFilterRow() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      color: Theme.of(context).cardColor,
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[900] : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isDark ? Colors.grey[800]! : Colors.grey[300]!,
+                      width: 1,
+                    ),
+                  ),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (val) {
+                      setState(() {
+                        _searchQuery = val;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search bill ID, customer, item...',
+                      hintStyle: TextStyle(
+                        color: AppTheme.textSecondaryLight.withOpacity(0.6),
+                        fontSize: 14,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: AppTheme.accentColor,
+                        size: 20,
+                      ),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 18),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _searchQuery = '';
+                                });
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                height: 46,
+                decoration: BoxDecoration(
+                  color: _selectedDateRange != null 
+                      ? AppTheme.accentColor.withOpacity(0.1) 
+                      : (isDark ? Colors.grey[900] : Colors.grey[100]),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _selectedDateRange != null 
+                        ? AppTheme.accentColor 
+                        : (isDark ? Colors.grey[800]! : Colors.grey[300]!),
+                    width: 1.5,
+                  ),
+                ),
+                child: IconButton(
+                  icon: Icon(
+                    _selectedDateRange != null ? Icons.date_range_rounded : Icons.calendar_today_rounded,
+                    color: _selectedDateRange != null ? AppTheme.accentColor : AppTheme.textSecondaryLight,
+                    size: 20,
+                  ),
+                  onPressed: _selectDateRange,
+                ),
+              ),
+            ],
+          ),
+          if (_selectedDateRange != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.filter_list_rounded,
+                    size: 14,
+                    color: AppTheme.accentColor.withOpacity(0.8),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${DateFormat('dd MMM').format(_selectedDateRange!.start)} - ${DateFormat('dd MMM').format(_selectedDateRange!.end)}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.accentColor,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: () {
+                      setState(() {
+                        _selectedDateRange = null;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.errorColor.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        size: 12,
+                        color: AppTheme.errorColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _selectDateRange() async {
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2024),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateRange: _selectedDateRange,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: AppTheme.accentColor,
+              onPrimary: Colors.white,
+              surface: Theme.of(context).scaffoldBackgroundColor,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDateRange = picked;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,23 +273,30 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : _bills.isEmpty
-              ? _buildEmptyState()
-              : RefreshIndicator(
-                  onRefresh: _manualSync,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _bills.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (context, index) {
-                      final bill = _bills[index];
-                      return _PremiumBillCard(
-                        bill: bill,
-                        onTap: () => _viewBillDetails(bill),
-                      );
-                    },
-                  ),
+          : Column(
+              children: [
+                _buildSearchAndFilterRow(),
+                Expanded(
+                  child: _filteredBills.isEmpty
+                      ? _buildEmptyState()
+                      : RefreshIndicator(
+                          onRefresh: _manualSync,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _filteredBills.length,
+                            separatorBuilder: (_, _) => const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final bill = _filteredBills[index];
+                              return _PremiumBillCard(
+                                bill: bill,
+                                onTap: () => _viewBillDetails(bill),
+                              );
+                            },
+                          ),
+                        ),
                 ),
+              ],
+            ),
     );
   }
 
@@ -147,7 +356,28 @@ class _PremiumBillCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(bill.id, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          bill.billNumber.isNotEmpty ? bill.billNumber : bill.id, 
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Tooltip(
+                        message: bill.isSynced ? 'Synced to Cloud' : 'Local Only (Pending Sync)',
+                        child: Icon(
+                          bill.isSynced ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
+                          size: 16,
+                          color: bill.isSynced 
+                              ? AppTheme.secondaryColor 
+                              : AppTheme.errorColor.withOpacity(0.8),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 4),
                   Text(bill.customerName, style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7), fontSize: 13)),
                   const SizedBox(height: 4),

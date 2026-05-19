@@ -297,6 +297,17 @@ class DatabaseService {
     return List.generate(maps.length, (i) => Bill.fromMap(maps[i]));
   }
 
+  Future<List<Bill>> getUnsyncedBills() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'bills',
+      where: 'is_synced = ?',
+      whereArgs: [0],
+      orderBy: 'created_at ASC',
+    );
+    return List.generate(maps.length, (i) => Bill.fromMap(maps[i]));
+  }
+
   Future<Bill?> getBillById(String id) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
@@ -682,6 +693,11 @@ class DatabaseService {
   Future<void> markAsSynced(String table, String id) async {
     final db = await database;
     await db.update(table, {'is_synced': 1}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> markBillAsSynced(String id) async {
+    final db = await database;
+    await db.update('bills', {'is_synced': 1}, where: 'id = ?', whereArgs: [id]);
   }
 
   // ==================== SETTINGS OPERATIONS ====================

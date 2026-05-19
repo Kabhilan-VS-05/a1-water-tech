@@ -95,6 +95,55 @@ function mapDailyRevenue(rows, days) {
   return items
 }
 
+function getJwtClaims(event) {
+  const jwtClaims = event?.requestContext?.authorizer?.jwt?.claims
+  if (jwtClaims && typeof jwtClaims === 'object') return jwtClaims
+
+  const legacyClaims = event?.requestContext?.authorizer?.claims
+  if (legacyClaims && typeof legacyClaims === 'object') return legacyClaims
+
+  return null
+}
+
+function decodeJwtPayload(token) {
+  try {
+    const parts = String(token || '').split('.')
+    if (parts.length < 2) return null
+    const payload = parts[1]
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(parts[1].length / 4) * 4, '=')
+    const json = Buffer.from(payload, 'base64').toString('utf8')
+    const parsed = JSON.parse(json)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch (_) {
+    return null
+  }
+}
+
+function getBearerTokenClaims(event) {
+  const headers = event?.headers || {}
+  const authHeader = headers.Authorization || headers.authorization || ''
+  if (!authHeader || typeof authHeader !== 'string') return null
+
+  const match = authHeader.match(/^Bearer\s+(.+)$/i)
+  if (!match) return null
+
+  return decodeJwtPayload(match[1])
+}
+
+function getAuthorizedIdentity(event) {
+  const claims = getJwtClaims(event) || getBearerTokenClaims(event)
+  if (!claims) return null
+
+  const sub = toText(claims.sub)
+  const email = toText(claims.email).toLowerCase()
+  const name = toText(claims.name || claims['cognito:username'] || email)
+
+  if (!sub && !email) return null
+  return { sub, email, name }
+}
+
 async function authorizeAdminSession(getPool, payload) {
   const cognitoSub = toText(payload?.cognitoSub || payload?.sub)
   const email = toText(payload?.email).toLowerCase()
@@ -1016,11 +1065,21 @@ export async function handleAdminRoute({
       return null
     }
 
+    const identity = getAuthorizedIdentity(event)
+    if (!identity) {
+      return response(401, { message: 'Unauthorized: missing or invalid JWT claims for admin route' })
+    }
+
     // Normalize path for matching (strip trailing slash if present)
     const normalizedPath = path.endsWith('/') ? path.slice(0, -1) : path;
 
     if (method === 'POST' && normalizedPath.endsWith('/admin/session')) {
-      const result = await authorizeAdminSession(getPool, parseJsonBody(event?.body))
+      const result = await authorizeAdminSession(getPool, {
+        cognitoSub: identity.sub,
+        sub: identity.sub,
+        email: identity.email,
+        displayName: identity.name,
+      })
       if (!result.ok) {
         return response(result.code, { message: result.message })
       }

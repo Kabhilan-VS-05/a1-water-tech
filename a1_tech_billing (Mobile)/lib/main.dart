@@ -42,6 +42,7 @@ void main() async {
   
   try {
     await NotificationService().initialize();
+    await NotificationService().requestPermission();
     
     Workmanager().initialize(
       callbackDispatcher,

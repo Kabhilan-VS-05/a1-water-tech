@@ -67,7 +67,7 @@ class ImageHelper {
       if (resolved.startsWith('data:image')) {
         final bytes = base64Decode(resolved.split(',').last);
         return Image.memory(bytes, width: width, height: height, fit: fit,
-            errorBuilder: (_, __, ___) => fallback);
+            errorBuilder: (_, _, _) => fallback);
       }
       return Image.network(
         resolved,
@@ -88,7 +88,7 @@ class ImageHelper {
             ),
           );
         },
-        errorBuilder: (_, __, ___) => fallback,
+        errorBuilder: (_, _, _) => fallback,
       );
     } catch (_) {
       return fallback;

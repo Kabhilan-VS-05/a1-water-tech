@@ -136,7 +136,7 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Row(
               children: [
-                const Icon(Icons.payment_rounded, color: const Color(0xFF4F46E5)),
+                const Icon(Icons.payment_rounded, color: Color(0xFF4F46E5)),
                 const SizedBox(width: 10),
                 const Text('Payment Settlement', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
               ],
@@ -440,7 +440,7 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
                 ? const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
-                    color: const Color(0xFF4F46E5),
+                    color: Color(0xFF4F46E5),
                   )
                 : null,
           ),
@@ -514,7 +514,7 @@ class _OrderItemCardState extends State<_OrderItemCard> {
           'Rs. ${widget.item.totalWithGst.toStringAsFixed(0)}',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
-            color: const Color(0xFF4F46E5),
+            color: Color(0xFF4F46E5),
           ),
         ),
       ),

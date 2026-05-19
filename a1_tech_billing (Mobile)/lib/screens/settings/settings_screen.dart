@@ -17,7 +17,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final DatabaseService _db = DatabaseService();
   bool _isLoading = true;
   
-  Map<String, String> _settings = {
+  final Map<String, String> _settings = {
     'companyName': 'A1 Water Tech',
     'supportPhone': '+91 98765 43210',
     'supportEmail': 'support@a1water.in',

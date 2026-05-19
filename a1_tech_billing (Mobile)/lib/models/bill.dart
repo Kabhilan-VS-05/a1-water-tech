@@ -59,6 +59,16 @@ class Bill {
   }
 
   factory Bill.fromMap(Map<String, dynamic> map) {
+    final customerData = map['customer'];
+    final customerMap = customerData is Map<String, dynamic>
+        ? customerData
+        : (customerData is Map ? Map<String, dynamic>.from(customerData) : <String, dynamic>{});
+
+    final billingData = map['billing'];
+    final billingMap = billingData is Map<String, dynamic>
+        ? billingData
+        : (billingData is Map ? Map<String, dynamic>.from(billingData) : <String, dynamic>{});
+
     final itemsData = map['items'];
     List<BillItem> parsedItems = [];
     if (itemsData != null) {
@@ -75,17 +85,31 @@ class Bill {
       id: map['id']?.toString() ?? '',
       billNumber: (map['bill_number'] ?? map['billNumber'])?.toString() ?? '',
       customerId: map['customer_id'] ?? map['customerId'],
-      customerName: map['customer_name'] ?? map['customerName'] ?? 'Unknown',
-      customerPhone: map['customer_phone'] ?? map['customerPhone'],
-      customerAddress: map['customer_address'] ?? map['customerAddress'],
+      customerName: map['customer_name'] ??
+          map['customerName'] ??
+          customerMap['name'] ??
+          customerMap['fullName'] ??
+          'Unknown',
+      customerPhone: map['customer_phone'] ??
+          map['customerPhone'] ??
+          customerMap['phone'],
+      customerAddress: map['customer_address'] ??
+          map['customerAddress'] ??
+          customerMap['address'],
       items: parsedItems,
       subtotal: double.tryParse(map['subtotal']?.toString() ?? '0') ?? 0,
-      gstAmount: double.tryParse((map['gst_amount'] ?? map['gstAmount'])?.toString() ?? '0') ?? 0,
+      gstAmount: double.tryParse(
+            (map['gst_amount'] ?? map['gstAmount'] ?? billingMap['gstAmount'])?.toString() ?? '0',
+          ) ??
+          0,
       total: double.tryParse(map['total']?.toString() ?? '0') ?? 0,
       paymentMode: map['payment_mode'] ?? map['paymentMode'] ?? 'pending',
-      status: map['status'] ?? 'draft',
+      status: map['status'] ?? 'confirmed',
       orderId: map['order_id'] ?? map['orderId'],
-      isSynced: map['is_synced'] == 1 || map['is_synced'] == true,
+      isSynced: map['is_synced'] == 1 ||
+          map['is_synced'] == true ||
+          map.containsKey('createdAt') ||
+          map.containsKey('billNumber'),
       createdAt: DateTime.tryParse(map['created_at'] ?? map['createdAt'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(map['updated_at'] ?? map['updatedAt'] ?? '') ?? DateTime.now(),
     );
@@ -170,15 +194,26 @@ class BillItem {
   }
 
   factory BillItem.fromMap(Map<String, dynamic> map) {
+    final qty = map['quantity'] ?? map['qty'] ?? 1;
+    final price = double.tryParse(map['price']?.toString() ?? '0') ?? 0;
+    final quantity = int.tryParse(qty.toString()) ?? 1;
+    final gstPercent = double.tryParse(map['gstPercent']?.toString() ?? '18') ?? 18;
+    final gstAmount = double.tryParse(map['gstAmount']?.toString() ?? '0') ?? 0;
+    final total =
+        double.tryParse(map['total']?.toString() ?? '') ?? ((price * quantity) + gstAmount);
+
     return BillItem(
-      itemId: map['itemId'],
-      name: map['name'],
-      type: map['type'],
-      price: map['price'].toDouble(),
-      quantity: map['quantity'] ?? 1,
-      gstPercent: map['gstPercent']?.toDouble() ?? 18,
-      gstAmount: map['gstAmount'].toDouble(),
-      total: map['total'].toDouble(),
+      itemId: map['itemId']?.toString() ??
+          map['productId']?.toString() ??
+          map['id']?.toString() ??
+          '',
+      name: map['name']?.toString() ?? 'Item',
+      type: map['type']?.toString() ?? 'product',
+      price: price,
+      quantity: quantity,
+      gstPercent: gstPercent,
+      gstAmount: gstAmount,
+      total: total,
       imageUrl: map['imageUrl'],
     );
   }

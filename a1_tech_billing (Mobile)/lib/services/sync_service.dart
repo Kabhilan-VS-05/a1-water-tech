@@ -17,7 +17,11 @@ class SyncService {
   final Connectivity _connectivity = Connectivity();
   final AuthService _auth = AuthService();
   Timer? _syncTimer;
+  Timer? _quickSyncTimer;
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
   bool _isSyncing = false;
+  bool _initialized = false;
+  DateTime? _lastQuickSyncAt;
   
   // Notification stream
   final _notificationController = StreamController<int>.broadcast();
@@ -34,11 +38,14 @@ class SyncService {
 
   // Initialize sync service
   Future<void> initialize() async {
+    if (_initialized) return;
+    _initialized = true;
+
     // Check initial connection
     await _checkConnection();
 
     // Listen for connection changes
-    _connectivity.onConnectivityChanged.listen((result) {
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((result) {
       _updateConnectionState(result);
     });
 
@@ -47,12 +54,27 @@ class SyncService {
       syncIfOnline();
     });
 
-    // Start high-frequency check for new orders/bookings (every 15 seconds) to trigger instant notifications
-    Timer.periodic(const Duration(seconds: 15), (_) async {
-      if (_isOnline && !_isSyncing) {
-        await syncOrdersOnly();
-      }
+    // Start high-frequency check for new orders/bookings in foreground.
+    _quickSyncTimer = Timer.periodic(const Duration(seconds: 8), (_) async {
+      await _triggerQuickSync();
     });
+
+    // Immediate startup checks so first notifications are not delayed.
+    await syncIfOnline();
+    await _triggerQuickSync();
+  }
+
+  Future<void> _triggerQuickSync() async {
+    if (!_isOnline || _isSyncing || !_auth.isAuthenticated) return;
+
+    final now = DateTime.now();
+    if (_lastQuickSyncAt != null &&
+        now.difference(_lastQuickSyncAt!) < const Duration(seconds: 6)) {
+      return;
+    }
+
+    _lastQuickSyncAt = now;
+    await syncOrdersOnly();
   }
 
   // Check current connection
@@ -240,6 +262,13 @@ class SyncService {
   // Upload pending changes from sync queue
   Future<SyncResult> _uploadPendingChanges() async {
     try {
+      // Force-backfill old/local bills that are not yet synced, even if they were
+      // created before sync_queue logic or queue rows were lost.
+      final forceBillsResult = await _forceUploadUnsyncedBills();
+      if (forceBillsResult == SyncResult.failed) {
+        print('Force upload unsynced bills failed.');
+      }
+
       final queue = await _db.getSyncQueue();
 
       if (queue.isEmpty) return SyncResult.success;
@@ -268,6 +297,62 @@ class SyncService {
       return SyncResult.partial;
     } catch (e) {
       print('Upload pending changes error: $e');
+      return SyncResult.failed;
+    }
+  }
+
+  Future<SyncResult> _forceUploadUnsyncedBills() async {
+    if (!_auth.isAuthenticated || !_isOnline) return SyncResult.offline;
+
+    try {
+      final unsyncedBills = await _db.getUnsyncedBills();
+      if (unsyncedBills.isEmpty) return SyncResult.success;
+
+      int successCount = 0;
+      int failCount = 0;
+
+      for (final bill in unsyncedBills) {
+        try {
+          final isServerId = int.tryParse(bill.id) != null;
+          if (isServerId && bill.billNumber.isNotEmpty) {
+            await _db.markBillAsSynced(bill.id);
+            successCount++;
+            continue;
+          }
+
+          final response = await _auth.makeAuthenticatedRequest(
+            '$_adminApiUrl/bills',
+            method: 'POST',
+            body: jsonDecode(bill.toJson()),
+          );
+
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final Map<String, dynamic> responseData = jsonDecode(response.body);
+            final serverItem = responseData['item'];
+            final String newId = serverItem?['id']?.toString() ?? '';
+            final String newBillNumber = serverItem?['billNumber']?.toString() ?? '';
+
+            if (newId.isNotEmpty && newBillNumber.isNotEmpty) {
+              await _db.updateLocalBillIdAndNumber(bill.id, newId, newBillNumber);
+            } else {
+              await _db.markBillAsSynced(bill.id);
+            }
+            successCount++;
+          } else {
+            print('Force bill upload failed (${bill.id}): ${response.statusCode} ${response.body}');
+            failCount++;
+          }
+        } catch (e) {
+          print('Force bill upload error (${bill.id}): $e');
+          failCount++;
+        }
+      }
+
+      if (failCount == 0) return SyncResult.success;
+      if (successCount == 0) return SyncResult.failed;
+      return SyncResult.partial;
+    } catch (e) {
+      print('Force upload unsynced bills error: $e');
       return SyncResult.failed;
     }
   }
@@ -525,7 +610,10 @@ class SyncService {
       if (!_isOnline) return SyncResult.failed;
       
       print('Syncing customers from: $_adminApiUrl/users');
-      final response = await http.get(Uri.parse('$_adminApiUrl/users'));
+      final response = await _auth.makeAuthenticatedRequest(
+        '$_adminApiUrl/users',
+        method: 'GET',
+      );
       
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
@@ -582,7 +670,10 @@ class SyncService {
       if (!_isOnline) return null;
       
       print('Fetching metrics from: $_adminApiUrl/metrics?days=$days');
-      final response = await http.get(Uri.parse('$_adminApiUrl/metrics?days=$days'));
+      final response = await _auth.makeAuthenticatedRequest(
+        '$_adminApiUrl/metrics?days=$days',
+        method: 'GET',
+      );
       
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
@@ -692,6 +783,22 @@ class SyncService {
   // Manual trigger sync from UI
   Future<SyncResult> manualSync() async {
     return await syncAll();
+  }
+
+  Future<SyncResult> forceSyncAllBillsToCloud() async {
+    if (!_isOnline) return SyncResult.offline;
+    if (!_auth.isAuthenticated) return SyncResult.failed;
+
+    final upload = await _forceUploadUnsyncedBills();
+    final pull = await _syncBills();
+
+    if (upload == SyncResult.success && pull == SyncResult.success) {
+      return SyncResult.success;
+    }
+    if (upload == SyncResult.failed && pull == SyncResult.failed) {
+      return SyncResult.failed;
+    }
+    return SyncResult.partial;
   }
 
   // Call this after any local save to sync immediately if online
@@ -894,6 +1001,7 @@ class SyncService {
   // Dispose
   void dispose() {
     _syncTimer?.cancel();
+    _quickSyncTimer?.cancel();
+    _connectivitySubscription?.cancel();
   }
 }
-

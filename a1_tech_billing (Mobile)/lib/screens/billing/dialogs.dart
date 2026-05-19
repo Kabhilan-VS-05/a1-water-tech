@@ -94,7 +94,7 @@ class _CustomerSearchDialogState extends State<CustomerSearchDialog> {
                                   backgroundColor: const Color(0xFFE0E7FF),
                                   child: const Icon(
                                     Icons.person,
-                                    color: const Color(0xFF4F46E5),
+                                    color: Color(0xFF4F46E5),
                                   ),
                                 ),
                                 title: Text(customer.name),

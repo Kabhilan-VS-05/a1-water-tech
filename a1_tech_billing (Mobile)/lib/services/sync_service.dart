@@ -373,7 +373,7 @@ class SyncService {
         }
         break;
       case 'customers':
-        if (operation == 'update') {
+        if (operation == 'update' || operation == 'delete') {
           endpoint = '$_adminApiUrl/users/${payload['id']}';
         } else {
           endpoint = '$_adminApiUrl/users';
@@ -538,6 +538,7 @@ class SyncService {
             gstPercent: double.tryParse(item['gstPercent']?.toString() ?? '18') ?? 18,
             category: item['category'],
             description: item['description'],
+            hsn: item['hsn'],
             imageUrl: item['imageUrl'],
             isActive: true,
             isSynced: true,
@@ -583,6 +584,7 @@ class SyncService {
             gstPercent: double.tryParse(item['gstPercent']?.toString() ?? '18') ?? 18,
             category: item['category'],
             description: item['description'],
+            hsn: item['hsn'],
             imageUrl: item['imageUrl'],
             isActive: true,
             isSynced: true,
@@ -622,24 +624,27 @@ class SyncService {
         
         int syncedCount = 0;
         for (final item in data) {
-          final userId = item['id']?.toString();
+          final rawId = item['id']?.toString();
           final rawPhone = item['phone']?.toString();
+          final source = item['source']?.toString() ?? 'website';
           
           if (rawPhone == null || rawPhone.isEmpty) {
             continue; // Need a phone number for local DB unique constraint
           }
           final phone = rawPhone.replaceAll(RegExp(r'\D'), '');
           
-          final existingCustomer = await _db.getCustomerByPhone(phone);
+          final existingCustomer = (rawId != null ? await _db.getCustomerById(rawId) : null) ?? await _db.getCustomerByPhone(phone);
           
           if (existingCustomer == null) {
             final customer = Customer(
-              id: 'cust-$phone',
+              id: rawId ?? (source == 'manual' ? 'manual-$phone' : 'cust-$phone'),
               name: item['name']?.toString() ?? 'Unknown User',
               phone: phone,
               email: item['email']?.toString(),
-              source: 'website',
+              source: source,
               address: item['address']?.toString(),
+              totalVisits: int.tryParse(item['totalVisits']?.toString() ?? '0') ?? 0,
+              totalSpent: double.tryParse(item['totalSpent']?.toString() ?? '0.0') ?? 0.0,
               createdAt: item['createdAt'] != null ? DateTime.tryParse(item['createdAt'].toString()) ?? DateTime.now() : DateTime.now(),
               isSynced: true,
             );
@@ -650,11 +655,15 @@ class SyncService {
             await _db.updateCustomer(existingCustomer.copyWith(
               email: item['email']?.toString() ?? existingCustomer.email,
               name: item['name']?.toString() ?? existingCustomer.name,
-              source: 'website', // Ensure it's marked as website
+              source: source,
+              address: item['address']?.toString() ?? existingCustomer.address,
+              totalVisits: int.tryParse(item['totalVisits']?.toString() ?? '0') ?? existingCustomer.totalVisits,
+              totalSpent: double.tryParse(item['totalSpent']?.toString() ?? '0.0') ?? existingCustomer.totalSpent,
+              isSynced: true,
             ), isSync: true);
           }
         }
-        print('Successfully synced $syncedCount website users');
+        print('Successfully synced $syncedCount users');
         return SyncResult.success;
       }
       return SyncResult.failed;

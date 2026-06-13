@@ -6,7 +6,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
 import '../../services/sync_service.dart';
-import '../../models/sync_result.dart';
 import '../../utils/image_helper.dart';
 import '../../theme/app_theme.dart';
 
@@ -20,17 +19,27 @@ class CatalogScreen extends StatefulWidget {
 class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProviderStateMixin {
   final DatabaseService _db = DatabaseService();
   final SyncService _sync = SyncService();
+  final TextEditingController _searchController = TextEditingController();
   late TabController _tabController;
   List<CatalogItem> _products = [];
   List<CatalogItem> _services = [];
   bool _isLoading = true;
-  bool _isSyncing = false;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _searchController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _loadCatalog();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
@@ -69,23 +78,7 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     }
   }
 
-  Future<void> _syncCatalog() async {
-    setState(() => _isSyncing = true);
-    final result = await _sync.manualSync();
-    setState(() => _isSyncing = false);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.message),
-          backgroundColor: result == SyncResult.success ? AppTheme.secondaryColor : AppTheme.errorColor,
-        ),
-      );
-      if (result == SyncResult.success || result == SyncResult.partial) {
-        _loadCatalog();
-      }
-    }
-  }
 
   Future<void> _addItem() async {
     final result = await showDialog<CatalogItem>(
@@ -143,18 +136,38 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(100),
+        preferredSize: const Size.fromHeight(130), // Increased height for search bar
         child: AppBar(
           elevation: 0,
           backgroundColor: Theme.of(context).colorScheme.surface,
-          actions: [
-            IconButton(
-              icon: _isSyncing
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppTheme.accentColor))
-                  : const Icon(Icons.sync_rounded, color: AppTheme.accentColor),
-              onPressed: _isSyncing ? null : _syncCatalog,
+          flexibleSpace: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
+              child: Container(
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).scaffoldBackgroundColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search products and services...',
+                    hintStyle: TextStyle(color: AppTheme.textSecondaryLight),
+                    prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondaryLight),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close, size: 20),
+                            onPressed: () => _searchController.clear(),
+                          )
+                        : null,
+                  ),
+                ),
+              ),
             ),
-          ],
+          ),
           bottom: TabBar(
             controller: _tabController,
             labelColor: AppTheme.accentColor,
@@ -172,8 +185,8 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildItemGrid(_products, 'product'),
-          _buildItemGrid(_services, 'service'),
+          _buildItemGrid(_getFilteredItems(_products), 'product'),
+          _buildItemGrid(_getFilteredItems(_services), 'service'),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -187,6 +200,17 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
         ),
       ),
     );
+  }
+
+  List<CatalogItem> _getFilteredItems(List<CatalogItem> items) {
+    final query = _searchController.text.toLowerCase().trim();
+    if (query.isEmpty) return items;
+    return items.where((item) {
+      final nameMatch = item.name.toLowerCase().contains(query);
+      final categoryMatch = item.category?.toLowerCase().contains(query) ?? false;
+      final hsnMatch = item.hsn?.toLowerCase().contains(query) ?? false;
+      return nameMatch || categoryMatch || hsnMatch;
+    }).toList();
   }
 
   Widget _buildItemGrid(List<CatalogItem> items, String type) {
@@ -206,7 +230,9 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
             ),
             const SizedBox(height: 16),
             Text(
-              type == 'product' ? 'No products in catalog' : 'No services in catalog',
+              _searchController.text.isEmpty
+                  ? (type == 'product' ? 'No products in catalog' : 'No services in catalog')
+                  : 'No matching results',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppTheme.textSecondaryLight),
             ),
           ],
@@ -392,6 +418,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
+  final _hsnController = TextEditingController();
   final _categoryController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _imageUrlController = TextEditingController();
@@ -405,6 +432,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
     if (widget.item != null) {
       _nameController.text = widget.item!.name;
       _priceController.text = widget.item!.price.toString();
+      _hsnController.text = widget.item!.hsn ?? '';
       _categoryController.text = widget.item!.category ?? '';
       _descriptionController.text = widget.item!.description ?? '';
       _imageUrlController.text = widget.item!.imageUrl ?? '';
@@ -422,6 +450,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
+    _hsnController.dispose();
     _categoryController.dispose();
     _descriptionController.dispose();
     _imageUrlController.dispose();
@@ -486,6 +515,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
         name: _nameController.text,
         price: price,
         gstPercent: _gstPercent,
+        hsn: _hsnController.text.isEmpty ? null : _hsnController.text,
         category: _categoryController.text.isEmpty ? null : _categoryController.text,
         description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
         imageUrl: _imageUrlController.text.isEmpty ? null : _imageUrlController.text,
@@ -622,6 +652,12 @@ class _AddItemDialogState extends State<_AddItemDialog> {
                 TextFormField(
                   controller: _categoryController,
                   decoration: const InputDecoration(labelText: 'Category', prefixIcon: Icon(Icons.category_outlined)),
+                ),
+                const SizedBox(height: 16),
+                
+                TextFormField(
+                  controller: _hsnController,
+                  decoration: const InputDecoration(labelText: 'HSN Code', prefixIcon: Icon(Icons.numbers_rounded)),
                 ),
                 const SizedBox(height: 32),
 

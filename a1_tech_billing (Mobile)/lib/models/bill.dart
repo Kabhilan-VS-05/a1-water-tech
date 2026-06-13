@@ -160,6 +160,7 @@ class BillItem {
   final String itemId;
   final String name;
   final String type; // product or service
+  final String? hsn;
   final double price;
   final int quantity;
   final double gstPercent;
@@ -171,6 +172,7 @@ class BillItem {
     required this.itemId,
     required this.name,
     required this.type,
+    this.hsn,
     required this.price,
     this.quantity = 1,
     this.gstPercent = 18,
@@ -184,6 +186,7 @@ class BillItem {
       'itemId': itemId,
       'name': name,
       'type': type,
+      'hsn': hsn ?? '',
       'price': price,
       'quantity': quantity,
       'gstPercent': gstPercent,
@@ -209,6 +212,7 @@ class BillItem {
           '',
       name: map['name']?.toString() ?? 'Item',
       type: map['type']?.toString() ?? 'product',
+      hsn: map['hsn']?.toString() ?? '',
       price: price,
       quantity: quantity,
       gstPercent: gstPercent,
@@ -222,6 +226,7 @@ class BillItem {
     String? itemId,
     String? name,
     String? type,
+    String? hsn,
     double? price,
     int? quantity,
     double? gstPercent,
@@ -233,6 +238,7 @@ class BillItem {
       itemId: itemId ?? this.itemId,
       name: name ?? this.name,
       type: type ?? this.type,
+      hsn: hsn ?? this.hsn,
       price: price ?? this.price,
       quantity: quantity ?? this.quantity,
       gstPercent: gstPercent ?? this.gstPercent,

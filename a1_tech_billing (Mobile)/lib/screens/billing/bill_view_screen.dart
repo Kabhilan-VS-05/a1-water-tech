@@ -142,8 +142,31 @@ class _BillViewScreenState extends State<BillViewScreen> {
     }
   }
 
+  Future<bool?> _showSignatureDialog() async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Signature Option'),
+        content: const Text('Choose how you want to sign the invoice:'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false), // Manual
+            child: const Text('MANUAL SIGN'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true), // Digital
+            child: const Text('DIGITAL SIGN'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _generatePdf() async {
     if (_bill == null) return;
+
+    final isDigital = await _showSignatureDialog();
+    if (isDigital == null) return; // User cancelled
 
     setState(() => _isLoading = true);
 
@@ -151,6 +174,7 @@ class _BillViewScreenState extends State<BillViewScreen> {
       final pdfFile = await PdfService.generateInvoice(
         _bill!,
         customer: _customer,
+        isDigitalSignature: isDigital,
       );
 
       // Show PDF

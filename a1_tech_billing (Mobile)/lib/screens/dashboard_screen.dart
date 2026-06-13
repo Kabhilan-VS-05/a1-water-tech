@@ -6,7 +6,7 @@ import '../services/database_service.dart';
 import '../services/sync_service.dart';
 import '../models/sync_result.dart';
 import '../theme/app_theme.dart';
-
+import 'billing/bill_view_screen.dart';
 import '../services/notification_service.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -20,7 +20,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final DatabaseService _db = DatabaseService();
   final SyncService _sync = SyncService();
   Map<String, dynamic> _stats = {
-    'todayRevenue': 0.0,
+    'weeklyRevenue': 0.0,
     'todayBills': 0,
     'pendingOrders': 0,
     'pendingBills': 0,
@@ -62,7 +62,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _fetchRemoteStats() async {
     if (!_sync.isOnline) return;
 
-    final remoteMetrics = await _sync.getRemoteMetrics(days: 1);
+    final remoteMetrics = await _sync.getRemoteMetrics(days: 7);
     final localStats = await _db.getDashboardStats();
     
     if (mounted) {
@@ -70,7 +70,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (remoteMetrics != null) {
           _stats = {
             ...localStats,
-            'todayRevenue': (remoteMetrics['revenueInRange'] ?? remoteMetrics['totalRevenue'] ?? 0.0).toDouble(),
+            'weeklyRevenue': (remoteMetrics['revenueInRange'] ?? remoteMetrics['totalRevenue'] ?? 0.0).toDouble(),
             'todayBills': remoteMetrics['salesCountInRange'] ?? remoteMetrics['salesCount'] ?? 0,
             'pendingOrders': remoteMetrics['pendingOrders'] ?? localStats['pendingOrders'] ?? 0,
             'pendingBills': remoteMetrics['billsInRange'] ?? remoteMetrics['billsCount'] ?? 0,
@@ -207,8 +207,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       mainAxisSpacing: 16,
       children: [
         _PremiumStatCard(
-          title: 'Money Today',
-          value: '₹${_stats['todayRevenue'].toStringAsFixed(0)}',
+          title: 'Money This Week',
+          value: '₹${(_stats['weeklyRevenue'] ?? 0.0).toStringAsFixed(0)}',
           icon: Icons.account_balance_wallet_rounded,
           gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF2563EB)]),
           onTap: () => context.read<AppProvider>().setTabIndex(2), // Billing
@@ -299,53 +299,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (ctx, index) {
         final bill = _recentBills[index];
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.receipt_long_rounded, color: AppTheme.accentColor),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(bill.customerName, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16)),
-                    const SizedBox(height: 4),
-                    Text('#${bill.billNumber}', style: Theme.of(context).textTheme.bodyMedium),
-                  ],
+        return Material(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => BillViewScreen(
+                    billId: bill.id,
+                    isEditable: true,
+                  ),
                 ),
+              ).then((_) {
+                _loadData();
+              });
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
               ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              child: Row(
                 children: [
-                  Text('₹${bill.total.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: bill.status == 'paid' ? AppTheme.secondaryColor.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: BorderRadius.circular(12)),
+                    child: const Icon(Icons.receipt_long_rounded, color: AppTheme.accentColor),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(bill.customerName, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16)),
+                        const SizedBox(height: 4),
+                        Text(bill.billNumber.isNotEmpty ? '#${bill.billNumber}' : '#${bill.id}', style: Theme.of(context).textTheme.bodyMedium),
+                      ],
                     ),
-                    child: Text(
-                      bill.status.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: bill.status == 'paid' ? AppTheme.secondaryColor : Colors.orange,
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('₹${bill.total.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: bill.status == 'paid' ? AppTheme.secondaryColor.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          bill.status.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: bill.status == 'paid' ? AppTheme.secondaryColor : Colors.orange,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         );
       },

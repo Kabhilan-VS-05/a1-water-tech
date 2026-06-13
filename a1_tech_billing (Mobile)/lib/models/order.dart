@@ -185,6 +185,7 @@ class OrderItem {
   final double price;
   final int quantity;
   final double gstPercent;
+  final String? hsn;
   final String? imageUrl;
 
   OrderItem({
@@ -194,6 +195,7 @@ class OrderItem {
     required this.price,
     this.quantity = 1,
     this.gstPercent = 18,
+    this.hsn,
     this.imageUrl,
   });
 
@@ -205,6 +207,7 @@ class OrderItem {
       'price': price,
       'quantity': quantity,
       'gstPercent': gstPercent,
+      'hsn': hsn ?? '',
       'imageUrl': imageUrl,
     };
   }
@@ -228,6 +231,7 @@ class OrderItem {
       price: price,
       quantity: quantity is String ? int.tryParse(quantity) ?? 1 : quantity,
       gstPercent: (map['gstPercent'] ?? 18).toDouble(),
+      hsn: map['hsn']?.toString() ?? '',
       imageUrl: map['image']?.toString() ?? map['imageUrl']?.toString(),
     );
   }

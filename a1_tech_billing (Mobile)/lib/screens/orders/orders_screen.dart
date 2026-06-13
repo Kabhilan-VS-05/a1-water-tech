@@ -6,7 +6,6 @@ import '../../models/models.dart';
 import '../../models/sync_result.dart';
 import '../../services/database_service.dart';
 import '../../services/sync_service.dart';
-import '../billing/bill_view_screen.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
 
@@ -27,7 +26,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   bool _isSyncing = false;
   bool _isFirstLoad = true;
   String _selectedFilter = 'pending';
-  String _selectedType = 'product'; // 'product' or 'service'
+  String _selectedType = 'service'; // 'service' or 'product'
   Timer? _refreshTimer;
 
   // Search & Filter state
@@ -202,13 +201,14 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           
           final matchesItems = item.items.any((orderItem) =>
               orderItem.name.toLowerCase().contains(query) ||
-              (orderItem.type.toLowerCase().contains(query) ?? false));
+              orderItem.type.toLowerCase().contains(query) ||
+              (orderItem.hsn?.toLowerCase().contains(query) ?? false));
               
           return matchesBasic || matchesItems;
         } else if (item is Booking) {
           final matchesBasic = item.id.toLowerCase().contains(query) ||
               item.name.toLowerCase().contains(query) ||
-              (item.phone.toLowerCase().contains(query) ?? false) ||
+              item.phone.toLowerCase().contains(query) ||
               (item.address?.toLowerCase().contains(query) ?? false) ||
               item.serviceType.toLowerCase().contains(query);
           return matchesBasic;
@@ -323,6 +323,7 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         price: price,
         quantity: 1,
         gstPercent: gstPercent,
+        hsn: matchedService?.hsn,
         imageUrl: imageUrl,
       );
 
@@ -601,8 +602,23 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
   }
 
   Widget _buildTypeSelector() {
-    final pendingOrdersCount = _orders.where((o) => o.status == 'pending').length;
-    final pendingBookingsCount = _bookings.where((b) => (b.status == 'pending' || b.status == 'scheduled') && !_isBookingExpired(b)).length;
+    int ordersCount = 0;
+    int bookingsCount = 0;
+
+    switch (_selectedFilter) {
+      case 'pending':
+        ordersCount = _orders.where((o) => o.status == 'pending').length;
+        bookingsCount = _bookings.where((b) => (b.status == 'pending' || b.status == 'scheduled') && !_isBookingExpired(b)).length;
+        break;
+      case 'confirmed':
+        ordersCount = _orders.where((o) => o.status == 'confirmed' || o.status == 'completed').length;
+        bookingsCount = _bookings.where((b) => b.status == 'confirmed' || b.status == 'completed').length;
+        break;
+      case 'rejected':
+        ordersCount = _orders.where((o) => o.status == 'rejected').length;
+        bookingsCount = _bookings.where((b) => b.status == 'rejected' || ((b.status == 'pending' || b.status == 'scheduled') && _isBookingExpired(b))).length;
+        break;
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -610,17 +626,17 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
       child: Row(
         children: [
           _TypeButton(
-            title: 'Product Orders ($pendingOrdersCount)',
-            isSelected: _selectedType == 'product',
-            icon: Icons.shopping_bag_outlined,
-            onTap: () => setState(() => _selectedType = 'product'),
-          ),
-          const SizedBox(width: 12),
-          _TypeButton(
-            title: 'Service Bookings ($pendingBookingsCount)',
+            title: 'Service Bookings ($bookingsCount)',
             isSelected: _selectedType == 'service',
             icon: Icons.miscellaneous_services_outlined,
             onTap: () => setState(() => _selectedType = 'service'),
+          ),
+          const SizedBox(width: 12),
+          _TypeButton(
+            title: 'Product Orders ($ordersCount)',
+            isSelected: _selectedType == 'product',
+            icon: Icons.shopping_bag_outlined,
+            onTap: () => setState(() => _selectedType = 'product'),
           ),
         ],
       ),

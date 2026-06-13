@@ -19,6 +19,7 @@ create table if not exists products (
   description text not null default '',
   features jsonb not null default '[]'::jsonb,
   recommendation text not null default '',
+  hsn text not null default '',
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -31,6 +32,7 @@ create table if not exists services (
   price numeric(12, 2) not null default 0,
   duration text not null default '',
   description text not null default '',
+  hsn text not null default '',
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -87,11 +89,11 @@ values (
   'A1 Water Tech',
   '+91 8778308119',
   'thinakarans12345@gmail.com',
-  'Gobichettipalayam, Tamil Nadu',
-  'G.K.M Gowtham Complex, Opp. HP Bunk',
-  'Sathy-Athani Main Road, Kalipatti',
-  'Gobichettipalayam - 638505',
-  '33CWHPH8901N1Z6'
+  'Gobichettipalayam',
+  '3/185/4 Bagavathi Nagar',
+  'Kanakappalayam',
+  'Erode-638505',
+  '33CWHPJ8901N1Z6'
 )
 on conflict (id) do nothing;
 

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 import 'bill_view_screen.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
+import '../../services/pdf_service.dart';
 import '../../services/sync_service.dart';
 import '../../theme/app_theme.dart';
 import 'package:intl/intl.dart';
@@ -89,7 +91,8 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
         final matchesItems = b.items.any((item) =>
             item.itemId.toLowerCase().contains(query) ||
             item.name.toLowerCase().contains(query) ||
-            item.type.toLowerCase().contains(query));
+            item.type.toLowerCase().contains(query) ||
+            (item.hsn?.toLowerCase().contains(query) ?? false));
             
         return matchesBasic || matchesItems;
       }).toList();
@@ -441,6 +444,59 @@ class _BillDetailsSheet extends StatelessWidget {
 
   const _BillDetailsSheet({required this.bill});
 
+  Future<bool?> _showSignatureDialog(BuildContext context) async {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Signature Option'),
+        content: const Text('Choose how you want to sign the invoice:'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false), // Manual
+            child: const Text('MANUAL SIGN'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true), // Digital
+            child: const Text('DIGITAL SIGN'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _printBill(BuildContext context) async {
+    try {
+      final isDigital = await _showSignatureDialog(context);
+      if (isDigital == null) return;
+      final pdfFile = await PdfService.generateInvoice(bill, isDigitalSignature: isDigital);
+      await Printing.layoutPdf(onLayout: (_) async => pdfFile);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Print failed: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareBill(BuildContext context) async {
+    try {
+      final isDigital = await _showSignatureDialog(context);
+      if (isDigital == null) return;
+      final pdfFile = await PdfService.generateInvoice(bill, isDigitalSignature: isDigital);
+      await Printing.sharePdf(
+        bytes: pdfFile,
+        filename: '${bill.billNumber.isNotEmpty ? bill.billNumber : bill.id}.pdf',
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Share failed: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -474,25 +530,42 @@ class _BillDetailsSheet extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Invoice ID', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
-                      Text(bill.id, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Text('Customer', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
-                      Text(bill.customerName, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Invoice ID', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
+                        Text(
+                          bill.id,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        Text('Customer', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
+                        Text(
+                          bill.customerName,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text('Date', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
-                      Text(DateFormat('MMM dd, yyyy').format(bill.createdAt), style: const TextStyle(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
-                      Text('Status', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
-                      _StatusBadge(status: bill.status),
-                    ],
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text('Date', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
+                        Text(
+                          DateFormat('MMM dd, yyyy').format(bill.createdAt),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        Text('Status', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
+                        _StatusBadge(status: bill.status),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -581,9 +654,7 @@ class _BillDetailsSheet extends StatelessWidget {
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Print functionality coming soon')));
-                    },
+                    onPressed: () => _printBill(context),
                     icon: const Icon(Icons.print),
                     label: const Text('Print Receipt'),
                   ),
@@ -591,9 +662,7 @@ class _BillDetailsSheet extends StatelessWidget {
                 const SizedBox(width: 16),
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Share functionality coming soon')));
-                    },
+                    onPressed: () => _shareBill(context),
                     style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accentColor),
                     icon: const Icon(Icons.share, color: Colors.white),
                     label: const Text('Share Invoice', style: TextStyle(color: Colors.white)),

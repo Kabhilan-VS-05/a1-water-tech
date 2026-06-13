@@ -270,18 +270,144 @@ async function updateAdminOrderStatus(getPool, orderDocId, payload) {
 
 async function fetchAdminUsers(getPool) {
   const result = await safeQuery(getPool().query(`
-    SELECT DISTINCT ON (user_id)
-      user_id as "id",
-      full_name as name,
-      phone,
-      email,
-      address,
-      city,
-      created_at as "createdAt"
-    FROM user_addresses
-    ORDER BY user_id, created_at DESC
+    WITH combined_users AS (
+      SELECT 
+        user_id as id,
+        coalesce(full_name, '') as name,
+        phone,
+        email,
+        address,
+        created_at
+      FROM user_addresses
+      UNION ALL
+      SELECT 
+        user_id as id,
+        coalesce(customer->>'fullName', customer->>'name', '') as name,
+        coalesce(customer->>'phone', '') as phone,
+        coalesce(customer->>'email', address_snapshot->>'email', '') as email,
+        coalesce(customer->>'address', address_snapshot->>'address', '') as address,
+        created_at
+      FROM orders
+      WHERE user_id IS NOT NULL AND user_id <> ''
+    ),
+    deduplicated_users AS (
+      SELECT DISTINCT ON (id)
+        id,
+        name,
+        phone,
+        email,
+        address,
+        created_at
+      FROM combined_users
+      WHERE id IS NOT NULL AND id <> ''
+      ORDER BY id, created_at DESC
+    )
+    SELECT 
+      id, 
+      name, 
+      phone, 
+      email, 
+      address, 
+      'website' as source, 
+      0 as "totalVisits", 
+      0.0::numeric(12, 2) as "totalSpent", 
+      created_at as "createdAt" 
+    FROM deduplicated_users
+    UNION ALL
+    SELECT 
+      id, 
+      name, 
+      phone, 
+      email, 
+      address, 
+      source, 
+      total_visits as "totalVisits", 
+      total_spent as "totalSpent", 
+      created_at as "createdAt" 
+    FROM customers
+    ORDER BY name ASC
   `));
   return result.rows
+}
+
+async function createAdminUser(getPool, payload) {
+  const id = toText(payload?.id, generateId());
+  const name = toText(payload?.name || payload?.fullName, 'Manual Customer');
+  const phone = toText(payload?.phone);
+  const email = toText(payload?.email);
+  const address = toText(payload?.address);
+  const source = toText(payload?.source, 'manual');
+  const totalVisits = toNumber(payload?.total_visits || payload?.totalVisits, 0);
+  const totalSpent = toNumber(payload?.total_spent || payload?.totalSpent, 0.0);
+
+  const result = await safeQuery(getPool().query(
+    `
+      insert into customers (
+        id,
+        name,
+        phone,
+        address,
+        email,
+        source,
+        total_visits,
+        total_spent,
+        created_at,
+        updated_at
+      )
+      values ($1, $2, $3, $4, $5, $6, $7, $8, now(), now())
+      on conflict (id) do update set
+        name = excluded.name,
+        phone = excluded.phone,
+        address = excluded.address,
+        email = excluded.email,
+        source = excluded.source,
+        total_visits = excluded.total_visits,
+        total_spent = excluded.total_spent,
+        updated_at = now()
+      returning id
+    `,
+    [id, name, phone || null, address || null, email || null, source, totalVisits, totalSpent]
+  ));
+
+  return result.rows[0] ? { id, docId: id } : null;
+}
+
+async function updateAdminUser(getPool, userId, payload) {
+  const name = toText(payload?.name || payload?.fullName);
+  const phone = toText(payload?.phone);
+  const email = toText(payload?.email);
+  const address = toText(payload?.address);
+  const source = toText(payload?.source, 'manual');
+  const totalVisits = toNumber(payload?.total_visits || payload?.totalVisits, 0);
+  const totalSpent = toNumber(payload?.total_spent || payload?.totalSpent, 0.0);
+
+  const result = await safeQuery(getPool().query(
+    `
+      update customers
+      set
+        name = case when $2 = '' then name else $2 end,
+        phone = case when $3 = '' then phone else $3 end,
+        address = case when $4 = '' then address else $4 end,
+        email = case when $5 = '' then email else $5 end,
+        source = $6,
+        total_visits = $7,
+        total_spent = $8,
+        updated_at = now()
+      where id = $1
+      returning id
+    `,
+    [userId, name, phone || null, address || null, email || null, source, totalVisits, totalSpent]
+  ));
+
+  return result.rowCount === 0 ? null : { id: userId, docId: userId };
+}
+
+async function deleteAdminUser(getPool, userId) {
+  const result = await safeQuery(getPool().query(
+    `delete from customers where id = $1`,
+    [userId]
+  ));
+  return { id: userId, rowCount: result.rowCount };
 }
 
 async function fetchAdminBookings(getPool) {
@@ -622,6 +748,7 @@ async function fetchAdminCatalog(getPool, collection) {
           name,
           description,
           price,
+          hsn,
           image_url as "imageUrl"
         from products
         order by updated_at desc, name asc
@@ -637,6 +764,7 @@ async function fetchAdminCatalog(getPool, collection) {
           name,
           description,
           price,
+          hsn,
           image_url as "imageUrl"
         from services
         order by updated_at desc, name asc
@@ -651,6 +779,7 @@ async function upsertAdminCatalogItem(getPool, collection, payload) {
   const name = toText(payload?.name, 'Unnamed')
   const description = toText(payload?.description)
   const price = toNumber(payload?.price, 0)
+  const hsn = toText(payload?.hsn)
   const imageUrl = toText(payload?.imageUrl || payload?.image_url)
   const requestedId = toText(payload?.docId || payload?.id)
   const finalId = requestedId || slugify(name)
@@ -672,19 +801,21 @@ async function upsertAdminCatalogItem(getPool, collection, payload) {
             category,
             image_url,
             price,
+            hsn,
             description
           )
-          values ($1, $2, $3, $4, $5, $6)
+          values ($1, $2, $3, $4, $5, $6, $7)
           on conflict (id)
           do update set
             name = excluded.name,
             category = excluded.category,
             image_url = excluded.image_url,
             price = excluded.price,
+            hsn = excluded.hsn,
             description = excluded.description,
             updated_at = now()
         `,
-      [finalId, name, category, imageUrl, price, description],
+      [finalId, name, category, imageUrl, price, hsn, description],
     ));
     return { id: finalId, docId: finalId }
   }
@@ -706,19 +837,21 @@ async function upsertAdminCatalogItem(getPool, collection, payload) {
             image_url,
             price,
             duration,
+            hsn,
             description
           )
-          values ($1, $2, $3, $4, $5, $6)
+          values ($1, $2, $3, $4, $5, $6, $7)
           on conflict (id)
           do update set
             name = excluded.name,
             image_url = excluded.image_url,
             price = excluded.price,
             duration = excluded.duration,
+            hsn = excluded.hsn,
             description = excluded.description,
             updated_at = now()
         `,
-      [finalId, name, imageUrl, price, duration, description],
+      [finalId, name, imageUrl, price, duration, hsn, description],
     ));
     return { id: finalId, docId: finalId }
   }
@@ -1260,6 +1393,35 @@ export async function handleAdminRoute({
         items: await fetchAdminUsers(getPool),
       })
     }
+
+    if (method === 'POST' && path.endsWith('/admin/users')) {
+      const item = await createAdminUser(getPool, parseJsonBody(event?.body))
+      return item
+        ? response(201, { item, ok: true })
+        : response(400, { message: 'Failed to create customer' })
+    }
+
+    if (method === 'PUT' && path.includes('/admin/users/')) {
+      const item = await updateAdminUser(
+        getPool,
+        getPathId(path, '/admin/users/'),
+        parseJsonBody(event?.body),
+      )
+      return item
+        ? response(200, { item, ok: true })
+        : response(404, { message: 'Customer not found' })
+    }
+
+    if (method === 'DELETE' && path.includes('/admin/users/')) {
+      const result = await deleteAdminUser(
+        getPool,
+        getPathId(path, '/admin/users/'),
+      )
+      return result
+        ? response(200, { ...result, ok: true })
+        : response(404, { message: 'Customer not found' })
+    }
+
 
     if (method === 'GET' && path.endsWith('/admin/bills')) {
       return response(200, {

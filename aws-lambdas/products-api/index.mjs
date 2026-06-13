@@ -82,6 +82,7 @@ async function fetchProducts() {
       rating,
       tag,
       tds,
+      hsn,
       warranty,
       description,
       features,
@@ -105,6 +106,7 @@ async function fetchServices() {
       image_url as "imageUrl",
       price,
       duration,
+      hsn,
       description,
       is_active as "isActive"
     from services

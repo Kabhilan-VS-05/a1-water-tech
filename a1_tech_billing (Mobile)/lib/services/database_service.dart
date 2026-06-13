@@ -28,7 +28,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onOpen: (db) async {
@@ -93,6 +93,14 @@ class DatabaseService {
         )
       ''');
     }
+    if (oldVersion < 6) {
+      // Add hsn column to catalog table
+      try {
+        await db.execute("ALTER TABLE catalog ADD COLUMN hsn TEXT DEFAULT ''");
+      } catch (e) {
+        // Ignore if already exists
+      }
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -144,6 +152,7 @@ class DatabaseService {
         gst_percent REAL DEFAULT 18,
         category TEXT,
         description TEXT,
+        hsn TEXT DEFAULT '',
         image_url TEXT,
         is_active INTEGER DEFAULT 1,
         is_synced INTEGER DEFAULT 0,
@@ -329,15 +338,17 @@ class DatabaseService {
     await _addToSyncQueue('bills', id, 'delete', '{"id": "$id"}');
   }
 
-  Future<double> getTodayRevenue() async {
+  Future<double> getWeeklyRevenue() async {
     final db = await database;
-    final today = DateTime.now().toIso8601String().split('T')[0];
+    final now = DateTime.now();
+    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+    final startOfWeekStr = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day).toIso8601String().split('T')[0];
 
     final result = await db.rawQuery('''
       SELECT SUM(total) as revenue 
       FROM bills 
-      WHERE status = 'paid' 
-      AND created_at LIKE '$today%'
+      WHERE status != 'draft' 
+      AND created_at >= '$startOfWeekStr'
     ''');
 
     return result.first['revenue'] as double? ?? 0.0;
@@ -731,12 +742,16 @@ class DatabaseService {
     final db = await database;
     final today = DateTime.now().toIso8601String().split('T')[0];
 
-    // Today's revenue
+    // Weekly revenue
+    final now = DateTime.now();
+    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
+    final startOfWeekStr = DateTime(startOfWeek.year, startOfWeek.month, startOfWeek.day).toIso8601String().split('T')[0];
+
     final revenueResult = await db.rawQuery('''
       SELECT SUM(total) as revenue 
       FROM bills 
-      WHERE status = 'paid' 
-      AND created_at LIKE '$today%'
+      WHERE status != 'draft' 
+      AND created_at >= '$startOfWeekStr'
     ''');
 
     // Today's bills count
@@ -771,7 +786,7 @@ class DatabaseService {
     final totalBillsResult = await db.rawQuery('SELECT COUNT(*) as count FROM bills');
 
     return {
-      'todayRevenue': revenueResult.first['revenue'] ?? 0.0,
+      'weeklyRevenue': revenueResult.first['revenue'] ?? 0.0,
       'todayBills': billsResult.first['count'] ?? 0,
       'pendingOrders': pendingOrdersResult.first['count'] ?? 0,
       'pendingBills': pendingBillsResult.first['count'] ?? 0,

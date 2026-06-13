@@ -8,6 +8,7 @@ class CatalogItem {
   final double gstPercent;
   final String? category;
   final String? description;
+  final String? hsn;
   final String? imageUrl;
   final bool isActive;
   final bool isSynced;
@@ -21,6 +22,7 @@ class CatalogItem {
     this.gstPercent = 18.0,
     this.category,
     this.description,
+    this.hsn,
     this.imageUrl,
     this.isActive = true,
     this.isSynced = false,
@@ -36,6 +38,7 @@ class CatalogItem {
       'gst_percent': gstPercent,
       'category': category,
       'description': description,
+      'hsn': hsn ?? '',
       'image_url': imageUrl,
       'is_active': isActive ? 1 : 0,
       'is_synced': isSynced ? 1 : 0,
@@ -52,6 +55,7 @@ class CatalogItem {
       gstPercent: map['gst_percent']?.toDouble() ?? 18.0,
       category: map['category'],
       description: map['description'],
+      hsn: map['hsn'],
       imageUrl: map['image_url'],
       isActive: map['is_active'] == 1,
       isSynced: map['is_synced'] == 1,
@@ -69,6 +73,7 @@ class CatalogItem {
     double? gstPercent,
     String? category,
     String? description,
+    String? hsn,
     String? imageUrl,
     bool? isActive,
     bool? isSynced,
@@ -82,6 +87,7 @@ class CatalogItem {
       gstPercent: gstPercent ?? this.gstPercent,
       category: category ?? this.category,
       description: description ?? this.description,
+      hsn: hsn ?? this.hsn,
       imageUrl: imageUrl ?? this.imageUrl,
       isActive: isActive ?? this.isActive,
       isSynced: isSynced ?? this.isSynced,

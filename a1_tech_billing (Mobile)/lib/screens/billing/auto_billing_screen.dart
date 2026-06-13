@@ -109,11 +109,30 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
 
       // Generate and show PDF
       try {
-        final pdfFile = await PdfService.generateInvoice(bill);
-        await Printing.layoutPdf(
-          name: 'Invoice_$billNumber',
-          onLayout: (format) => pdfFile,
+        final isDigital = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Signature Option'),
+            content: const Text('Choose how you want to sign the invoice:'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false), // Manual
+                child: const Text('MANUAL SIGN'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true), // Digital
+                child: const Text('DIGITAL SIGN'),
+              ),
+            ],
+          ),
         );
+        if (isDigital != null) {
+          final pdfFile = await PdfService.generateInvoice(bill, isDigitalSignature: isDigital);
+          await Printing.layoutPdf(
+            name: 'Invoice_$billNumber',
+            onLayout: (format) => pdfFile,
+          );
+        }
       } catch (e) {
         print('PDF generation error: $e');
       }

@@ -87,7 +87,7 @@ Purpose:
 
 - serves both the React website and the Flutter admin app
 - provides API endpoints
-- reads and writes to PostgreSQL in RDS
+- reads and writes to PostgreSQL in Supabase
 - works with Cognito for authentication flow
 
 ---
@@ -222,19 +222,19 @@ Data hooks fetch AWS-backed data for the customer app:
 - cart is linked to signed-in user
 - address is selected
 - checkout sends order data to AWS API
-- order is stored in RDS
+- order is stored in Supabase
 
 #### Service booking flow
 
 - customer selects service
 - customer selects date/time
 - address snapshot is included
-- booking is stored in RDS
+- booking is stored in Supabase
 
 #### Feedback flow
 
 - customer sends feedback or contact message
-- message is stored in RDS
+- message is stored in Supabase
 - admin later sees it in Flutter admin app
 
 #### Auth flow
@@ -482,7 +482,7 @@ Current function:
 
 - `a1-products-api`
 
-### 7.4 RDS PostgreSQL
+### 7.4 Supabase PostgreSQL
 
 Used for:
 
@@ -603,7 +603,7 @@ The customer website and admin app are connected.
 ### Example
 
 - customer places order on website
-- order goes to RDS through AWS API
+- order goes to Supabase through AWS API
 - admin app reads that order from AWS
 - admin confirms order
 - admin generates bill
@@ -612,7 +612,7 @@ The customer website and admin app are connected.
 Another example:
 
 - customer books a service
-- booking is stored in RDS
+- booking is stored in Supabase
 - admin sees booking in Flutter app
 - admin confirms or rejects it
 
@@ -719,4 +719,4 @@ Suggested main references:
 
 If someone asks what this project is, the simplest correct answer is:
 
-**A1 Water Tech is a cloud-based customer sales, service booking, admin billing, and business operations platform built with a React website, a Flutter admin app, and a shared AWS backend using Lambda, API Gateway, RDS, Cognito, Amplify, and S3.**
+**A1 Water Tech is a cloud-based customer sales, service booking, admin billing, and business operations platform built with a React website, a Flutter admin app, and a shared AWS backend using Lambda, API Gateway, Supabase PostgreSQL, Cognito, Amplify, and S3.**

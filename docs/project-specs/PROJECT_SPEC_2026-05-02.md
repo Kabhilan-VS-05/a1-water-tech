@@ -12,7 +12,7 @@
 Complete business system consisting of:
 - **Customer Website:** React-based frontend for customers to browse products/services and place orders
 - **Admin Mobile App:** Flutter-based app for shop management (this project)
-- **Shared Backend:** AWS (API Gateway + Lambda + PostgreSQL RDS + Cognito + S3)
+- **Shared Backend:** AWS (API Gateway + Lambda + Supabase PostgreSQL + Cognito + S3)
 
 ### Objective
 Redesign and rebuild the admin mobile application to be:
@@ -240,7 +240,7 @@ lib/
 |---------|---------|
 | API Gateway | REST API endpoints |
 | Lambda | Business logic handlers |
-| RDS PostgreSQL | Cloud database |
+| Supabase PostgreSQL | Cloud database |
 | Cognito | User authentication |
 | S3 | Image and PDF storage |
 

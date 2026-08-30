@@ -348,4 +348,26 @@ All features are production-ready with:
 
 **Implementation Date:** 2026-07-01  
 **Status:** ✅ COMPLETE AND TESTED  
-**Version:** 1.0.0
+**Version:** 1.1.0
+
+---
+
+### **Phase 6: UI/UX Refactoring & Interactive Elements** ✅
+**Status:** COMPLETED  
+**Problem:** The app had disjointed themes (different background colors in list items, missing interactive ripple effects on buttons/cards).  
+**Solution Implemented:**
+- Unified `CardTheme` in `app_theme.dart` with a standardized 14px/16px border radius.
+- Replaced custom `Container` and `DecoratedBox` wrappers with native `Card` and `Material` components.
+- Fixed the issue where `ListTile` background color or ink splashes were invisible by wrapping them properly.
+- Replaced `GestureDetector` with `InkWell` across the app (including Dashboard, Purchase Order, Workflow, Settings, Manual Billing) to ensure all interactive elements show a ripple effect upon tap.
+- Applied a vibrant primary color scheme (`#2563EB`) that maintains a professional look in both Light and Dark modes.
+
+**Files Modified:**
+- `lib/theme/app_theme.dart`
+- `lib/screens/dashboard_screen.dart`
+- `lib/screens/billing/billing_dashboard_screen.dart`
+- `lib/screens/billing/manual_billing_screen.dart`
+- `lib/screens/quotation/quotation_screen.dart`
+- `lib/screens/purchase_order/purchase_order_screen.dart`
+- `lib/screens/workflow/workflow_dashboard.dart`
+- `lib/screens/settings/business_info_screen.dart`

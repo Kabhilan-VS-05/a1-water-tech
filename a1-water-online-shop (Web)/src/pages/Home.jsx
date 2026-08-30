@@ -60,30 +60,28 @@ export default function Home() {
               <p className="text-slate-500 text-lg leading-relaxed mb-8 max-w-lg">
                 Book certified technician visits, explore AMC care plans, and shop genuine water purification systems — all in one place.
               </p>
-              <div className="flex flex-wrap gap-3">
-                <Link to="/bookings" className="btn-primary px-6 py-3 text-base">
+              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <Link to="/bookings" className="btn-primary px-6 py-3.5 text-base justify-center w-full sm:w-auto">
                   <Calendar className="w-4 h-4" />
                   Book a Service Visit
                 </Link>
-                <Link to="/shop" className="btn-secondary px-6 py-3 text-base">
+                <Link to="/shop" className="btn-secondary px-6 py-3.5 text-base justify-center w-full sm:w-auto">
                   Browse Products
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
-              <div className="flex items-center gap-6 mt-8 pt-8 border-t border-slate-100">
+              <div className="grid grid-cols-3 gap-2 mt-8 pt-8 border-t border-slate-100">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-slate-900">500+</div>
-                  <div className="text-xs text-slate-400 font-medium">Happy Customers</div>
+                  <div className="text-xl sm:text-2xl font-bold text-slate-900">500+</div>
+                  <div className="text-[11px] sm:text-xs text-slate-400 font-medium">Happy Customers</div>
                 </div>
-                <div className="h-8 w-px bg-slate-100" />
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-slate-900">100%</div>
-                  <div className="text-xs text-slate-400 font-medium">Genuine Parts</div>
+                <div className="text-center border-x border-slate-100 px-1">
+                  <div className="text-xl sm:text-2xl font-bold text-slate-900">100%</div>
+                  <div className="text-[11px] sm:text-xs text-slate-400 font-medium">Genuine Parts</div>
                 </div>
-                <div className="h-8 w-px bg-slate-100" />
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-slate-900">24hr</div>
-                  <div className="text-xs text-slate-400 font-medium">Response Time</div>
+                  <div className="text-xl sm:text-2xl font-bold text-slate-900">24hr</div>
+                  <div className="text-[11px] sm:text-xs text-slate-400 font-medium">Response Time</div>
                 </div>
               </div>
             </div>
@@ -164,45 +162,45 @@ export default function Home() {
             {/* Right — Quick booking links */}
             <div className="space-y-3 w-full">
               <div className="card p-5">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-slate-800 truncate sm:whitespace-normal">Technician Home Visit</div>
+                    <div className="text-sm font-semibold text-slate-800">Technician Home Visit</div>
                     <div className="text-xs text-slate-500 mt-0.5">Same-day or next-day slots available</div>
                   </div>
-                  <Link to="/bookings" className="btn-primary text-xs px-4 py-2 flex-shrink-0 whitespace-nowrap">
+                  <Link to="/bookings" className="btn-primary text-xs px-4 py-2 flex-shrink-0 justify-center w-full sm:w-auto">
                     Book Now
                   </Link>
                 </div>
               </div>
               <div className="card p-5">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-semibold text-slate-800">Annual Maintenance Contract</div>
                     <div className="text-xs text-slate-500 mt-0.5">4 visits, genuine parts, extended warranty</div>
                   </div>
-                  <Link to="/services" className="btn-secondary text-xs px-4 py-2 flex-shrink-0 whitespace-nowrap">
+                  <Link to="/services" className="btn-secondary text-xs px-4 py-2 flex-shrink-0 justify-center w-full sm:w-auto">
                     View Plans
                   </Link>
                 </div>
               </div>
               <div className="card p-5">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-slate-800 truncate sm:whitespace-normal">Filter Replacement</div>
+                    <div className="text-sm font-semibold text-slate-800">Filter Replacement</div>
                     <div className="text-xs text-slate-500 mt-0.5">Genuine OEM filters with installation</div>
                   </div>
-                  <Link to="/bookings" className="btn-secondary text-xs px-4 py-2 flex-shrink-0 whitespace-nowrap">
+                  <Link to="/bookings" className="btn-secondary text-xs px-4 py-2 flex-shrink-0 justify-center w-full sm:w-auto">
                     Schedule
                   </Link>
                 </div>
               </div>
               <div className="card p-5">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-semibold text-slate-800 truncate sm:whitespace-normal">New System Installation</div>
+                    <div className="text-sm font-semibold text-slate-800">New System Installation</div>
                     <div className="text-xs text-slate-500 mt-0.5">Professional install with demo & training</div>
                   </div>
-                  <Link to="/bookings" className="btn-secondary text-xs px-4 py-2 flex-shrink-0 whitespace-nowrap">
+                  <Link to="/bookings" className="btn-secondary text-xs px-4 py-2 flex-shrink-0 justify-center w-full sm:w-auto">
                     Book
                   </Link>
                 </div>

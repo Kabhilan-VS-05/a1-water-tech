@@ -57,14 +57,14 @@ class _CustomersScreenState extends State<CustomersScreen> with SingleTickerProv
 
   void _filterCustomers() {
     final query = _searchController.text.toLowerCase();
-    final isWebsiteTab = _tabController.index == 0; // Tab 0 is Website App
+    final isWebsiteTab = _tabController.index == 0; // Tab 0 is Online Clients
 
     setState(() {
       _filteredCustomers = _customers.where((c) {
         final matchesQuery = c.name.toLowerCase().contains(query) || (c.phone?.toLowerCase().contains(query) ?? false);
         
         if (isWebsiteTab) {
-          return matchesQuery && c.source == 'website';
+          return matchesQuery && c.source != 'manual';
         } else {
           return matchesQuery && c.source == 'manual';
         }
@@ -140,51 +140,48 @@ class _CustomersScreenState extends State<CustomersScreen> with SingleTickerProv
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(130), // Increased height for search bar
-        child: AppBar(
-          elevation: 0,
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          flexibleSpace: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search customers...',
-                    hintStyle: TextStyle(color: AppTheme.textSecondaryLight),
-                    prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondaryLight),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.close, size: 20),
-                            onPressed: () => _searchController.clear(),
-                          )
-                        : null,
-                  ),
-                ),
-              ),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF334155)
+                  : const Color(0xFFE5E7EB),
             ),
           ),
-          bottom: TabBar(
-            controller: _tabController,
-            labelColor: AppTheme.accentColor,
-            unselectedLabelColor: AppTheme.textSecondaryLight,
-            indicatorColor: AppTheme.accentColor,
-            indicatorWeight: 3,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-            tabs: const [
-              Tab(text: 'Website App'),
-              Tab(text: 'Walk-in / Manual'),
-            ],
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search clients by name or phone...',
+              hintStyle: TextStyle(color: AppTheme.textSecondaryLight),
+              prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondaryLight),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => _searchController.clear(),
+                    )
+                  : null,
+            ),
           ),
+        ),
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: AppTheme.accentColor,
+          unselectedLabelColor: AppTheme.textSecondaryLight,
+          indicatorColor: AppTheme.accentColor,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+          tabs: const [
+            Tab(text: 'Online Clients'),
+            Tab(text: 'Walk-in / Manual Clients'),
+          ],
         ),
       ),
       body: _isLoading
@@ -208,9 +205,9 @@ class _CustomersScreenState extends State<CustomersScreen> with SingleTickerProv
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'customers_fab',
         onPressed: _addNewCustomer,
-        backgroundColor: AppTheme.accentColor,
+        backgroundColor: const Color(0xFFE91E63),
         icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text('Add Customer', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text('ADD CUSTOMER', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
       ),
     );
   }
@@ -223,7 +220,7 @@ class _CustomersScreenState extends State<CustomersScreen> with SingleTickerProv
           Icon(Icons.people_alt_rounded, size: 80, color: AppTheme.dividerColorLight),
           const SizedBox(height: 16),
           Text(
-            _searchController.text.isEmpty ? 'No customers found' : 'No matching results',
+            _searchController.text.isEmpty ? 'No clients found' : 'No matching results',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppTheme.textSecondaryLight),
           ),
         ],
@@ -247,6 +244,8 @@ class _PremiumCustomerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -255,10 +254,11 @@ class _PremiumCustomerCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB)),
           boxShadow: [
             BoxShadow(
-              color: AppTheme.primaryColor.withOpacity(0.02),
-              blurRadius: 8,
+              color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+              blurRadius: 6,
               offset: const Offset(0, 2),
             ),
           ],
@@ -267,10 +267,14 @@ class _PremiumCustomerCard extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 24,
-              backgroundColor: AppTheme.accentColor.withOpacity(0.1),
+              backgroundColor: isDark ? const Color(0xFF334155) : AppTheme.primaryColor.withOpacity(0.1),
               child: Text(
                 customer.name.isNotEmpty ? customer.name[0].toUpperCase() : 'C',
-                style: const TextStyle(color: AppTheme.accentColor, fontWeight: FontWeight.bold, fontSize: 20),
+                style: TextStyle(
+                  color: isDark ? const Color(0xFF38BDF8) : AppTheme.primaryColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
               ),
             ),
             const SizedBox(width: 16),
@@ -278,22 +282,47 @@ class _PremiumCustomerCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(customer.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(
+                    customer.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: isDark ? Colors.white : const Color(0xFF111827),
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   if (customer.phone != null && customer.phone!.isNotEmpty)
-                    Text(customer.phone!, style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 13)),
+                    Text(
+                      customer.phone!,
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF94A3B8) : AppTheme.textSecondaryLight,
+                        fontSize: 13,
+                      ),
+                    ),
                   if (customer.email != null && customer.email!.isNotEmpty)
-                    Text(customer.email!, style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
+                    Text(
+                      customer.email!,
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF94A3B8) : AppTheme.textSecondaryLight,
+                        fontSize: 12,
+                      ),
+                    ),
                 ],
               ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text('₹${customer.totalSpent.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.w800, color: AppTheme.accentColor, fontSize: 16)),
-                Text('${customer.totalVisits} orders', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
-              ],
-            )
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF334155) : const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: isDark ? const Color(0xFF475569) : const Color(0xFFE5E7EB)),
+              ),
+              child: Icon(
+                Icons.edit_note_rounded,
+                color: isDark ? const Color(0xFF38BDF8) : AppTheme.primaryColor,
+                size: 20,
+              ),
+            ),
           ],
         ),
       ),

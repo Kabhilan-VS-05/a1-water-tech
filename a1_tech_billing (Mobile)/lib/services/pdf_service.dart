@@ -4,6 +4,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart';
 import 'package:intl/intl.dart';
 import '../models/models.dart';
+import '../services/database_service.dart';
 import '../utils/number_to_words.dart';
 
 class PdfService {
@@ -18,6 +19,31 @@ class PdfService {
     Customer? customer,
     bool isDigitalSignature = true,
   }) async {
+    return _buildPdf(bill, false, customer, isDigitalSignature);
+  }
+
+  static Future<Uint8List> generateQuotation(
+    Quotation quotation, {
+    Customer? customer,
+    bool isDigitalSignature = true,
+  }) async {
+    Customer? fetchedCustomer = customer;
+    if (fetchedCustomer == null && quotation.customerId != null && quotation.customerId!.isNotEmpty) {
+      try {
+        fetchedCustomer = await DatabaseService().getCustomerById(quotation.customerId!);
+      } catch (e) {
+        // Ignore
+      }
+    }
+    return _buildPdf(quotation, true, fetchedCustomer, isDigitalSignature);
+  }
+
+  static Future<Uint8List> _buildPdf(
+    dynamic document,
+    bool isQuotation,
+    Customer? customer,
+    bool isDigitalSignature,
+  ) async {
     final pdf = Document();
 
     final logoBytes = base64Decode(_logoBase64);
@@ -34,15 +60,15 @@ class PdfService {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeader(logoImage),
+              _buildHeader(logoImage, isQuotation),
               SizedBox(height: 15),
-              _buildBillingSection(bill, customer),
+              _buildBillingSection(document, customer, isQuotation),
               SizedBox(height: 15),
-              _buildItemsTable(bill),
+              _buildItemsTable(document),
               SizedBox(height: 15),
-              _buildSummaryRow(bill),
+              _buildSummaryRow(document),
               SizedBox(height: 15),
-              _buildPaymentAndSignature(bill, signatureImage, isDigitalSignature),
+              _buildPaymentAndSignature(document, signatureImage, isDigitalSignature),
             ],
           );
         },
@@ -96,7 +122,7 @@ class PdfService {
     );
   }
 
-  static Widget _buildHeader(ImageProvider logoImage) {
+  static Widget _buildHeader(ImageProvider logoImage, bool isQuotation) {
     return Column(
       children: [
         Row(
@@ -158,7 +184,7 @@ class PdfService {
               width: 80,
               alignment: Alignment.topRight,
               child: Text(
-                'Tax\nInvoice',
+                isQuotation ? 'Quotation' : 'Tax\nInvoice',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -175,7 +201,7 @@ class PdfService {
     );
   }
 
-  static Widget _buildBillingSection(Bill bill, Customer? customer) {
+  static Widget _buildBillingSection(dynamic bill, Customer? customer, bool isQuotation) {
     final formattedDate = DateFormat('dd/MM/yyyy').format(bill.createdAt);
     
     // Check if customer address and phone are available, fallback to defaults
@@ -225,15 +251,28 @@ class PdfService {
                       ],
                     ),
                   ],
-                  SizedBox(height: 1),
-                  Text(
-                    'GSTIN: 33AALFT8519N1ZI',
-                    style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    'State Name: TAMIL NADU - 33',
-                    style: const TextStyle(fontSize: 8.5),
-                  ),
+                  if (isQuotation && customer != null && customer.source == 'website' && customer.email != null && customer.email!.isNotEmpty) ...[
+                    SizedBox(height: 2),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        _buildEmailIcon(),
+                        SizedBox(width: 4),
+                        Text(customer.email!, style: const TextStyle(fontSize: 8.5)),
+                      ],
+                    ),
+                  ],
+                  if (bill.customerGst != null && bill.customerGst.toString().isNotEmpty) ...[
+                    SizedBox(height: 1),
+                    Text(
+                      'GSTIN: ${bill.customerGst}',
+                      style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      'State Name: TAMIL NADU - 33',
+                      style: const TextStyle(fontSize: 8.5),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -247,7 +286,7 @@ class PdfService {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       Text(
-                        'Invoice#',
+                        isQuotation ? 'Quotation#' : 'Invoice#',
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
@@ -256,7 +295,7 @@ class PdfService {
                       ),
                       SizedBox(width: 15),
                       Text(
-                        bill.id.startsWith('BILL-') ? '1' : bill.id,
+                        isQuotation ? bill.quotationNumber : (bill.id.startsWith('BILL-') ? '1' : bill.id),
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -269,7 +308,7 @@ class PdfService {
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       Text(
-                        'Invoice Date:',
+                        isQuotation ? 'Quotation Date:' : 'Invoice Date:',
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
@@ -297,7 +336,7 @@ class PdfService {
     );
   }
 
-  static Widget _buildItemsTable(Bill bill) {
+  static Widget _buildItemsTable(dynamic bill) {
     return Table(
       border: TableBorder(
         top: const BorderSide(color: PdfColors.grey400, width: 0.5),
@@ -397,8 +436,16 @@ class PdfService {
     );
   }
 
-  static Widget _buildSummaryRow(Bill bill) {
+
+  static Widget _buildSummaryRow(dynamic bill) {
     final totalInWords = NumberToWords.convertAmount(bill.total);
+    bool isQuotation = bill.runtimeType.toString() == 'Quotation';
+    
+    double roundOffDelta = 0.0;
+    if (isQuotation && bill.isRoundedOff) {
+      double rawTotal = bill.subtotal + bill.gstAmount + (bill.otherChargeAmount ?? 0) + (bill.isOtherChargeTaxable ? ((bill.otherChargeAmount ?? 0) * (bill.otherChargeGstPercent ?? 0) / 100) : 0);
+      roundOffDelta = bill.total - rawTotal;
+    }
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -433,6 +480,20 @@ class PdfService {
               SizedBox(height: 2),
               _buildSummaryItem('SGST', bill.gstAmount / 2),
               SizedBox(height: 2),
+              if (isQuotation && bill.otherChargeAmount != null && bill.otherChargeAmount! > 0) ...[
+                _buildSummaryItem((bill.otherChargeLabel?.isNotEmpty ?? false) ? bill.otherChargeLabel!.toUpperCase() : 'OTHER CHARGE', bill.otherChargeAmount!),
+                SizedBox(height: 2),
+                if (bill.isOtherChargeTaxable) ...[
+                  _buildSummaryItem('OTHER CHARGE CGST', (bill.otherChargeAmount! * bill.otherChargeGstPercent! / 100) / 2),
+                  SizedBox(height: 2),
+                  _buildSummaryItem('OTHER CHARGE SGST', (bill.otherChargeAmount! * bill.otherChargeGstPercent! / 100) / 2),
+                  SizedBox(height: 2),
+                ],
+              ],
+              if (isQuotation && bill.isRoundedOff && roundOffDelta != 0.0) ...[
+                _buildSummaryItem('ROUND OFF', roundOffDelta),
+                SizedBox(height: 2),
+              ],
               Container(
                 decoration: const BoxDecoration(
                   border: Border(
@@ -478,56 +539,74 @@ class PdfService {
     );
   }
 
-  static Widget _buildPaymentAndSignature(Bill bill, ImageProvider signatureImage, bool isDigitalSignature) {
-    return Row(
+  static Widget _buildPaymentAndSignature(dynamic bill, ImageProvider signatureImage, bool isDigitalSignature) {
+    bool isQuotation = bill.runtimeType.toString() == 'Quotation';
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Payment instructions on left
-        Expanded(
-          flex: 3,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Payment Instructions',
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Payment instructions on left
+            Expanded(
+              flex: 3,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Payment Instructions',
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 3),
+                  Text('ACCOUNT NAME: A1 WATER TECH', style: const TextStyle(fontSize: 8.5)),
+                  Text('ACCOUNT NUMBER: 120033612394', style: const TextStyle(fontSize: 8.5)),
+                  Text('IFSC CODE: CNRB0001260', style: const TextStyle(fontSize: 8.5)),
+                ],
               ),
-              SizedBox(height: 3),
-              Text('ACCOUNT NAME: A1 WATER TECH', style: const TextStyle(fontSize: 8.5)),
-              Text('ACCOUNT NUMBER: 120033612394', style: const TextStyle(fontSize: 8.5)),
-              Text('IFSC CODE: CNRB0001260', style: const TextStyle(fontSize: 8.5)),
-            ],
-          ),
+            ),
+            SizedBox(width: 20),
+            // Authorized signature on right
+            Expanded(
+              flex: 2,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    'For, A1 WATER TECH',
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 5),
+                  Container(
+                    width: 75,
+                    height: 40,
+                    child: isDigitalSignature ? Image(signatureImage, fit: BoxFit.contain) : SizedBox(height: 40),
+                  ),
+                  SizedBox(height: 5),
+                  Text(
+                    'AUTHORIZED SIGNATURE',
+                    style: TextStyle(
+                      fontSize: 7.5,
+                      fontWeight: FontWeight.bold,
+                      color: PdfColor.fromHex('#4B5563'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-        SizedBox(width: 20),
-        // Authorized signature on right
-        Expanded(
-          flex: 2,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Text(
-                'For, A1 WATER TECH',
-                style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 5),
-              Container(
-                width: 75,
-                height: 40,
-                child: isDigitalSignature ? Image(signatureImage, fit: BoxFit.contain) : SizedBox(height: 40),
-              ),
-              SizedBox(height: 5),
-              Text(
-                'AUTHORIZED SIGNATURE',
-                style: TextStyle(
-                  fontSize: 7.5,
-                  fontWeight: FontWeight.bold,
-                  color: PdfColor.fromHex('#4B5563'),
-                ),
-              ),
-            ],
+        if (isQuotation && bill.terms != null && bill.terms!.isNotEmpty) ...[
+          SizedBox(height: 20),
+          Text(
+            'Terms & Conditions',
+            style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold),
           ),
-        ),
+          SizedBox(height: 5),
+          Text(
+            bill.terms!,
+            style: const TextStyle(fontSize: 8),
+          ),
+        ]
       ],
     );
   }

@@ -7,6 +7,7 @@ class Bill {
   final String customerName;
   final String? customerPhone;
   final String? customerAddress;
+  final String? customerGst;
   final List<BillItem> items;
   final double subtotal;
   final double gstAmount;
@@ -25,6 +26,7 @@ class Bill {
     required this.customerName,
     this.customerPhone,
     this.customerAddress,
+    this.customerGst,
     required this.items,
     required this.subtotal,
     required this.gstAmount,
@@ -45,6 +47,7 @@ class Bill {
       'customer_name': customerName,
       'customer_phone': customerPhone,
       'customer_address': customerAddress,
+      'customer_gst': customerGst,
       'items': jsonEncode(items.map((e) => e.toMap()).toList()),
       'subtotal': subtotal,
       'gst_amount': gstAmount,
@@ -96,6 +99,7 @@ class Bill {
       customerAddress: map['customer_address'] ??
           map['customerAddress'] ??
           customerMap['address'],
+      customerGst: map['customer_gst'] ?? map['customerGst'],
       items: parsedItems,
       subtotal: double.tryParse(map['subtotal']?.toString() ?? '0') ?? 0,
       gstAmount: double.tryParse(
@@ -106,10 +110,7 @@ class Bill {
       paymentMode: map['payment_mode'] ?? map['paymentMode'] ?? 'pending',
       status: map['status'] ?? 'confirmed',
       orderId: map['order_id'] ?? map['orderId'],
-      isSynced: map['is_synced'] == 1 ||
-          map['is_synced'] == true ||
-          map.containsKey('createdAt') ||
-          map.containsKey('billNumber'),
+      isSynced: map['is_synced'] == 1 || map['is_synced'] == true,
       createdAt: DateTime.tryParse(map['created_at'] ?? map['createdAt'] ?? '') ?? DateTime.now(),
       updatedAt: DateTime.tryParse(map['updated_at'] ?? map['updatedAt'] ?? '') ?? DateTime.now(),
     );
@@ -124,6 +125,7 @@ class Bill {
     String? customerName,
     String? customerPhone,
     String? customerAddress,
+    String? customerGst,
     List<BillItem>? items,
     double? subtotal,
     double? gstAmount,
@@ -142,6 +144,7 @@ class Bill {
       customerName: customerName ?? this.customerName,
       customerPhone: customerPhone ?? this.customerPhone,
       customerAddress: customerAddress ?? this.customerAddress,
+      customerGst: customerGst ?? this.customerGst,
       items: items ?? this.items,
       subtotal: subtotal ?? this.subtotal,
       gstAmount: gstAmount ?? this.gstAmount,

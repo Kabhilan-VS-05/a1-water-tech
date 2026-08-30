@@ -4,7 +4,7 @@ import { useAuth } from '../state/AuthContext.jsx'
 import useAddresses from '../hooks/useAddresses.js'
 import {
   User, MapPin, Mail, Phone, LogOut, Plus, Trash2, Edit2,
-  ShieldCheck, Box, LayoutList, ChevronRight, Loader2, AlertCircle, CheckCircle
+  ShieldCheck, Box, LayoutList, ChevronRight, Loader2, AlertCircle, CheckCircle, FileText
 } from 'lucide-react'
 
 const emptyAddressForm = {
@@ -20,7 +20,7 @@ const emptyAddressForm = {
 export default function Profile() {
   const { user, signOut } = useAuth()
   const [addressRefreshKey, setAddressRefreshKey] = useState(0)
-  const { addresses, loading: addressLoading } = useAddresses(user?.uid, addressRefreshKey)
+  const { addresses, loading: addressLoading } = useAddresses(user?.uid, user?.email, addressRefreshKey)
   const [editingId, setEditingId] = useState('')
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [addressStatus, setAddressStatus] = useState('')
@@ -129,7 +129,13 @@ export default function Profile() {
                 </div>
                 <div className="min-w-0">
                   <div className="text-sm text-slate-400 font-semibold uppercase tracking-wider">Authorized User</div>
-                  <h3 className="text-base font-bold text-slate-800 truncate mt-0.5">{user?.displayName || 'Customer Account'}</h3>
+                  <h3 className="text-base font-bold text-slate-800 truncate mt-0.5">
+                    {user?.displayName && user.displayName !== user.email
+                      ? user.displayName
+                      : user?.email
+                      ? user.email.split('@')[0]
+                      : 'Customer Account'}
+                  </h3>
                   <p className="text-xs text-slate-500 truncate mt-0.5">{user?.email}</p>
                 </div>
               </div>
@@ -140,6 +146,13 @@ export default function Profile() {
                   <div className="flex items-center gap-2.5">
                     <Box className="w-4.5 h-4.5 text-slate-400 group-hover:text-indigo-600" />
                     <span className="text-sm font-semibold text-slate-700 group-hover:text-indigo-600">Order History</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" />
+                </Link>
+                <Link to="/quotations" className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl hover:bg-indigo-50 hover:text-indigo-600 transition-colors group">
+                  <div className="flex items-center gap-2.5">
+                    <FileText className="w-4.5 h-4.5 text-slate-400 group-hover:text-indigo-600" />
+                    <span className="text-sm font-semibold text-slate-700 group-hover:text-indigo-600">My Quotations</span>
                   </div>
                   <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-indigo-600" />
                 </Link>

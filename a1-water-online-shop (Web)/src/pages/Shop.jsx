@@ -38,7 +38,10 @@ export default function Shop() {
       priceRange === 'all' ? [0, Number.MAX_SAFE_INTEGER] : priceRange.split('-').map(Number)
     return products.filter(p => {
       const matchQ   = p.name.toLowerCase().includes(query.trim().toLowerCase())
-      const matchCat = category === 'All' || p.category === category
+      const matchCat = category === 'All' || 
+                       (p.category || '').toLowerCase() === category.toLowerCase() ||
+                       (p.category || '').toLowerCase().includes(category.toLowerCase()) ||
+                       category.toLowerCase().includes((p.category || '').toLowerCase())
       const matchP   = p.price >= min && p.price <= max
       return matchQ && matchCat && matchP
     })

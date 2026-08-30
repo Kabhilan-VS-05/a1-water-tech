@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../providers/app_provider.dart';
-import '../../theme/app_theme.dart';
+import 'package:intl/intl.dart';
+import '../../models/models.dart';
 import '../../services/database_service.dart';
+import 'bill_view_screen.dart';
+import 'manual_billing_screen.dart';
 
 class BillingDashboardScreen extends StatefulWidget {
-  const BillingDashboardScreen({super.key});
+  final bool? showAppBar;
+  const BillingDashboardScreen({super.key, this.showAppBar = true});
 
   @override
   State<BillingDashboardScreen> createState() => _BillingDashboardScreenState();
@@ -13,146 +15,151 @@ class BillingDashboardScreen extends StatefulWidget {
 
 class _BillingDashboardScreenState extends State<BillingDashboardScreen> {
   final DatabaseService _db = DatabaseService();
+  List<Bill> _bills = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
 
-  Future<int> _fetchBillCount() async {
-    final stats = await _db.getDashboardStats();
-    return stats['totalBills'] ?? 0;
+  @override
+  void initState() {
+    super.initState();
+    _loadBills();
+  }
+
+  Future<void> _loadBills() async {
+    setState(() => _isLoading = true);
+    final list = await _db.getBills();
+    if (mounted) {
+      setState(() {
+        _bills = list;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _bills.where((b) {
+      final query = _searchQuery.toLowerCase().trim();
+      if (query.isEmpty) return true;
+      return b.billNumber.toLowerCase().contains(query) ||
+          b.customerName.toLowerCase().contains(query) ||
+          (b.customerPhone != null && b.customerPhone!.contains(query));
+    }).toList();
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: FutureBuilder<int>(
-        future: _fetchBillCount(),
-        builder: (context, snapshot) {
-          final billCount = snapshot.data ?? 0;
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Billing Center', style: Theme.of(context).textTheme.headlineMedium),
-                const SizedBox(height: 8),
-                Text('Create and manage invoices', style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).textTheme.bodySmall?.color)),
-                const SizedBox(height: 32),
-
-                // Manual Billing Card
-                _BillingActionCard(
-                  title: 'Create Manual Bill',
-                  description: 'Generate an invoice for walk-in customers or custom orders.',
-                  icon: Icons.receipt_rounded,
-                  color: AppTheme.accentColor,
-                  onTap: () => Navigator.pushNamed(context, '/billing/manual').then((_) => setState(() {})),
-                ),
-
-                const SizedBox(height: 16),
-
-                // Generate from Orders Card
-                _BillingActionCard(
-                  title: 'Generate from Orders',
-                  description: 'Convert confirmed online orders directly into invoices.',
-                  icon: Icons.local_shipping_rounded,
-                  color: AppTheme.secondaryColor,
-                  onTap: () {
-                    context.read<AppProvider>().setTabIndex(1);
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // Billing History Card
-                _BillingActionCard(
-                  title: 'Billing History',
-                  description: 'View, edit, print or share past invoices and receipts.',
-                  subtitle: 'Total Records: $billCount',
-                  icon: Icons.history_rounded,
-                  color: const Color(0xFF8B5CF6),
-                  onTap: () => Navigator.pushNamed(context, '/billing/history').then((_) => setState(() {})),
-                ),
-              ],
+      appBar: (widget.showAppBar ?? true) ? AppBar(
+        backgroundColor: const Color(0xFF1E293B),
+        foregroundColor: Colors.white,
+        iconTheme: const IconThemeData(color: Colors.white),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text('Invoice List', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)),
+      ) : null,
+      body: Column(
+        children: [
+          // Search Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: Theme.of(context).cardColor,
+            child: TextField(
+              onChanged: (v) => setState(() => _searchQuery = v),
+              decoration: InputDecoration(
+                hintText: 'Search by Name, Company OR Invoice#',
+                hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
+                filled: true,
+                fillColor: Theme.of(context).scaffoldBackgroundColor,
+                contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
             ),
-          );
-        },
+          ),
+
+          // List Body
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : filtered.isEmpty
+                    ? Center(
+                        child: Text(
+                          'You don\'t have any invoices',
+                          style: TextStyle(fontSize: 15, color: Colors.grey.shade600),
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: filtered.length,
+                        itemBuilder: (ctx, i) {
+                          final bill = filtered[i];
+                          return Card(
+                            clipBehavior: Clip.hardEdge,
+                            child: ListTile(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              title: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    bill.customerName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                  ),
+                                  Text(
+                                    '₹${bill.total.toStringAsFixed(2)}',
+                                    style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Theme.of(context).colorScheme.onSurface),
+                                  ),
+                                ],
+                              ),
+                              subtitle: Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      '#${bill.billNumber} • ${DateFormat('dd/MM/yyyy').format(bill.createdAt)}',
+                                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: bill.status == 'paid' ? Colors.green.shade50 : Colors.amber.shade50,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        bill.status.toUpperCase(),
+                                        style: TextStyle(
+                                          color: bill.status == 'paid' ? Colors.green.shade800 : Colors.amber.shade900,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(builder: (_) => BillViewScreen(bill: bill)),
+                                ).then((_) => _loadBills());
+                              },
+                            ),
+                            );
+                          },
+                      ),
+          ),
+        ],
       ),
-    );
-  }
-}
-
-class _BillingActionCard extends StatelessWidget {
-  final String title;
-  final String description;
-  final String? subtitle;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _BillingActionCard({
-    required this.title,
-    required this.description,
-    this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(Theme.of(context).brightness == Brightness.light ? 0.04 : 0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 32, color: color),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 6),
-                  Text(description, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7))),
-                  if (subtitle != null) ...[
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        subtitle!,
-                        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Icon(Icons.arrow_forward_ios_rounded, color: AppTheme.dividerColorLight, size: 20),
-          ],
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: const Color(0xFFE91E63), // Pink FAB matching video
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text('MAKE INVOICE', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const ManualBillingScreen()),
+          ).then((_) => _loadBills());
+        },
       ),
     );
   }

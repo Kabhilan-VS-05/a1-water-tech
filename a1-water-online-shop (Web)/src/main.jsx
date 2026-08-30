@@ -8,6 +8,7 @@ import { CartProvider } from './state/CartContext.jsx'
 import { AuthProvider } from './state/AuthContext.jsx'
 import { SiteSettingsProvider } from './state/SiteSettingsContext.jsx'
 import { ToastProvider } from './state/ToastContext.jsx'
+import { NotificationProvider } from './state/NotificationContext.jsx'
 
 import { ThemeProvider } from './state/ThemeContext.jsx'
 
@@ -17,11 +18,13 @@ createRoot(document.getElementById('root')).render(
       <ThemeProvider>
         <AuthProvider>
           <ToastProvider>
-            <SiteSettingsProvider>
-              <CartProvider>
-                <App />
-              </CartProvider>
-            </SiteSettingsProvider>
+            <NotificationProvider>
+              <SiteSettingsProvider>
+                <CartProvider>
+                  <App />
+                </CartProvider>
+              </SiteSettingsProvider>
+            </NotificationProvider>
           </ToastProvider>
         </AuthProvider>
       </ThemeProvider>

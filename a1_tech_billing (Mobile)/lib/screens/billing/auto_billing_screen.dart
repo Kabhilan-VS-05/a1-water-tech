@@ -1,10 +1,12 @@
 import '../../utils/image_helper.dart';
+import '../../utils/invoice_number_generator.dart';
 import 'package:flutter/material.dart';
 import 'package:printing/printing.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
 import '../../services/sync_service.dart';
 import '../../services/pdf_service.dart';
+import '../../services/logger_service.dart';
 import '../../theme/app_theme.dart';
 
 class AutoBillingScreen extends StatefulWidget {
@@ -20,14 +22,19 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
   Order? _order;
   bool _isLoading = true;
   bool _isGenerating = false;
+  bool _orderLoaded = false; // Guard flag to prevent re-loading
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _loadOrder();
+  void initState() {
+    super.initState();
+    // Schedule after first frame so ModalRoute is available
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_orderLoaded) _loadOrder();
+    });
   }
 
   Future<void> _loadOrder() async {
+    _orderLoaded = true;
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Order) {
       setState(() {
@@ -36,7 +43,7 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
       });
     } else {
       // If no order passed, go back
-      Navigator.pop(context);
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -47,25 +54,32 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
 
     final now = DateTime.now();
     final billNumber =
-        'BILL-${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}-${now.millisecondsSinceEpoch.toString().substring(7)}';
+        await InvoiceNumberGenerator.generateInvoiceNumber(forDate: now);
 
-    // Convert order items to bill items with the latest catalog images
+    // Convert order items to bill items with the latest catalog images and HSN codes
     final List<BillItem> billItems = [];
     for (var orderItem in _order!.items) {
       String? latestImageUrl = orderItem.imageUrl;
+      String? hsn = orderItem.hsn;
       try {
         final catalogItem = await _db.getCatalogItemById(orderItem.itemId);
-        if (catalogItem != null && catalogItem.imageUrl != null && catalogItem.imageUrl!.isNotEmpty) {
-          latestImageUrl = catalogItem.imageUrl;
+        if (catalogItem != null) {
+          if (catalogItem.imageUrl != null && catalogItem.imageUrl!.isNotEmpty) {
+            latestImageUrl = catalogItem.imageUrl;
+          }
+          if (catalogItem.hsn != null && catalogItem.hsn!.isNotEmpty) {
+            hsn = catalogItem.hsn;
+          }
         }
       } catch (e) {
-        debugPrint('Error getting catalog item image during billing: $e');
+        debugPrint('Error getting catalog item details during billing: $e');
       }
 
       billItems.add(BillItem(
         itemId: orderItem.itemId,
         name: orderItem.name,
         type: orderItem.type,
+        hsn: hsn,
         price: orderItem.price,
         quantity: orderItem.quantity,
         gstPercent: orderItem.gstPercent,
@@ -76,7 +90,7 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
     }
 
     final bill = Bill(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: billNumber,
       billNumber: billNumber,
       customerName: _order!.customerName,
       customerPhone: _order!.customerPhone,
@@ -134,10 +148,10 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
           );
         }
       } catch (e) {
-        print('PDF generation error: $e');
+        AppLogger.error('PDF generation error: $e', tag: 'AutoBilling');
       }
 
-      Navigator.pushReplacementNamed(context, '/dashboard');
+      if (mounted) Navigator.pop(context);
     }
   }
 
@@ -454,7 +468,7 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
             style: isBold ? const TextStyle(fontWeight: FontWeight.bold) : null,
           ),
           Text(
-            'Rs. ${amount.toStringAsFixed(0)}',
+            '₹${amount.toStringAsFixed(0)}',
             style: isBold
                 ? const TextStyle(
                     fontWeight: FontWeight.bold,
@@ -527,10 +541,10 @@ class _OrderItemCardState extends State<_OrderItemCard> {
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
         ),
         subtitle: Text(
-          '${widget.item.quantity} x Rs. ${widget.item.price.toStringAsFixed(0)}',
+          '${widget.item.quantity} x ₹${widget.item.price.toStringAsFixed(0)}',
         ),
         trailing: Text(
-          'Rs. ${widget.item.totalWithGst.toStringAsFixed(0)}',
+          '₹${widget.item.totalWithGst.toStringAsFixed(0)}',
           style: const TextStyle(
             fontWeight: FontWeight.bold,
             color: Color(0xFF4F46E5),

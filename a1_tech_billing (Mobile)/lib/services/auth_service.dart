@@ -2,14 +2,13 @@ import 'dart:convert';
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../config/app_config.dart';
+import 'logger_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   AuthService._internal();
-
-  static const String _userPoolId = 'ap-south-1_frjBbY5H9';
-  static const String _clientId = '7ipnh0krocrne8a98n5kecdtg0';
 
   late CognitoUserPool _userPool;
   CognitoUser? _currentUser;
@@ -17,7 +16,10 @@ class AuthService {
 
   // Initialize Cognito
   Future<void> initialize() async {
-    _userPool = CognitoUserPool(_userPoolId, _clientId);
+    _userPool = CognitoUserPool(
+      AppConfig.cognitoUserPoolId,
+      AppConfig.cognitoClientId,
+    );
 
     // Get current user
     final currentUser = await _userPool.getCurrentUser();
@@ -34,10 +36,10 @@ class AuthService {
     try {
       _session = await user.getSession();
       if (_session?.isValid() == true) {
-        print('User is authenticated: ${user.username}');
+        AppLogger.info('User is authenticated: ${user.username}', tag: 'Auth');
       }
     } catch (e) {
-      print('No active session: $e');
+      AppLogger.debug('No active session: $e', tag: 'Auth');
       _session = null;
     }
   }
@@ -70,13 +72,13 @@ class AuthService {
       if (_session?.isValid() == true) {
         await _saveUserSession();
 
-        print('Sign in successful for: $username');
+        AppLogger.info('Sign in successful for: $username', tag: 'Auth');
         return AuthResult.success;
       } else {
         return AuthResult.failed;
       }
     } on CognitoClientException catch (e) {
-      print('Cognito error: ${e.message}');
+      AppLogger.error('Cognito error: ${e.message}', tag: 'Auth');
       if (e.code == 'NotAuthorizedException') {
         return AuthResult.invalidCredentials;
       } else if (e.code == 'UserNotConfirmedException') {
@@ -84,7 +86,7 @@ class AuthService {
       }
       return AuthResult.failed;
     } catch (e) {
-      print('Sign in error: $e');
+      AppLogger.error('Sign in error: $e', tag: 'Auth');
       return AuthResult.failed;
     }
   }
@@ -98,9 +100,9 @@ class AuthService {
       // Clear stored session
       await _clearUserSession();
 
-      print('User signed out');
+      AppLogger.info('User signed out', tag: 'Auth');
     } catch (e) {
-      print('Sign out error: $e');
+      AppLogger.error('Sign out error: $e', tag: 'Auth');
     }
   }
 
@@ -161,7 +163,7 @@ class AuthService {
         _session?.refreshToken?.token ?? '',
       );
     } catch (e) {
-      print('Error saving session: $e');
+      AppLogger.error('Error saving session: $e', tag: 'Auth');
     }
   }
 
@@ -174,7 +176,7 @@ class AuthService {
       await prefs.remove('access_token');
       await prefs.remove('refresh_token');
     } catch (e) {
-      print('Error clearing session: $e');
+      AppLogger.error('Error clearing session: $e', tag: 'Auth');
     }
   }
 
@@ -200,13 +202,13 @@ class AuthService {
         );
 
         if (_session?.isValid() == true) {
-          print('Session restored for: $username');
+          AppLogger.info('Session restored for: $username', tag: 'Auth');
         } else {
           await _refreshSession();
         }
       }
     } catch (e) {
-      print('Error restoring session: $e');
+      AppLogger.error('Error restoring session: $e', tag: 'Auth');
       await _clearUserSession();
     }
   }
@@ -224,11 +226,11 @@ class AuthService {
         if (newSession?.isValid() == true) {
           _session = newSession;
           await _saveUserSession();
-          print('Session refreshed successfully');
+          AppLogger.info('Session refreshed successfully', tag: 'Auth');
         }
       }
     } catch (e) {
-      print('Error refreshing session: $e');
+      AppLogger.error('Error refreshing session: $e', tag: 'Auth');
       await _clearUserSession();
     }
   }

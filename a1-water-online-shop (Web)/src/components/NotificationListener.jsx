@@ -1,13 +1,13 @@
 import { useEffect } from 'react'
 import { useAuth } from '../state/AuthContext.jsx'
-import { useToast } from '../state/ToastContext.jsx'
+import { useNotifications } from '../state/NotificationContext.jsx'
 
 export default function NotificationListener() {
   const { user } = useAuth()
-  const { showToast } = useToast()
+  const { addNotificationsBatch } = useNotifications()
 
   useEffect(() => {
-    // Request native notification permissions
+    // Request native Windows/browser notification permissions if not asked yet
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
     }
@@ -17,12 +17,6 @@ export default function NotificationListener() {
     if (!user) return
 
     let active = true
-    const triggerNotification = (title, body, type) => {
-      showToast(body, type)
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title, { body })
-      }
-    }
 
     const checkStatus = async () => {
       if (!active) return
@@ -31,7 +25,9 @@ export default function NotificationListener() {
         const baseUrl = import.meta.env.VITE_API_BASE_URL
         if (!baseUrl) return
 
-        // Fetch Orders
+        const batchItems = []
+
+        // 1. Fetch Orders
         const ordersRes = await fetch(`${baseUrl}/orders?userId=${encodeURIComponent(user.uid)}`)
         if (ordersRes.ok && active) {
           const data = await ordersRes.json()
@@ -44,11 +40,13 @@ export default function NotificationListener() {
             if (order.status === 'confirmed' || order.status === 'rejected') {
               if (notifiedOrders[order.id] !== order.status) {
                 if (Object.keys(notifiedOrders).length > 0) {
-                  triggerNotification(
-                    'Order Update', 
-                    `Order #${order.orderId || order.id.slice(0,8)} has been ${order.status}!`, 
-                    order.status === 'rejected' ? 'error' : 'success'
-                  )
+                  batchItems.push({
+                    id: `order_${order.id}_${order.status}`,
+                    title: 'Order Status Update',
+                    body: `Order #${order.orderId || order.id.slice(0,8)} is now ${order.status}!`,
+                    type: 'order',
+                    link: '/orders'
+                  })
                 }
                 notifiedOrders[order.id] = order.status
                 updated = true
@@ -63,7 +61,7 @@ export default function NotificationListener() {
           if (updated) localStorage.setItem('notifiedOrders', JSON.stringify(notifiedOrders))
         }
 
-        // Fetch Bookings
+        // 2. Fetch Bookings
         const bookingsRes = await fetch(`${baseUrl}/bookings?userId=${encodeURIComponent(user.uid)}`)
         if (bookingsRes.ok && active) {
           const data = await bookingsRes.json()
@@ -76,11 +74,13 @@ export default function NotificationListener() {
             if (booking.status === 'confirmed' || booking.status === 'rejected') {
               if (notifiedBookings[booking.id] !== booking.status) {
                 if (Object.keys(notifiedBookings).length > 0) {
-                  triggerNotification(
-                    'Service Booking Update', 
-                    `Your booking for ${booking.serviceName} has been ${booking.status}!`, 
-                    booking.status === 'rejected' ? 'error' : 'success'
-                  )
+                  batchItems.push({
+                    id: `booking_${booking.id}_${booking.status}`,
+                    title: 'Service Booking Update',
+                    body: `Booking for ${booking.serviceName} has been ${booking.status}!`,
+                    type: 'booking',
+                    link: '/bookings'
+                  })
                 }
                 notifiedBookings[booking.id] = booking.status
                 updated = true
@@ -95,8 +95,54 @@ export default function NotificationListener() {
           if (updated) localStorage.setItem('notifiedBookings', JSON.stringify(notifiedBookings))
         }
 
+        // 3. Fetch Quotations
+        const phoneParam = user.phoneNumber ? `&phone=${encodeURIComponent(user.phoneNumber)}` : ''
+        const emailParam = user.email ? `&email=${encodeURIComponent(user.email)}` : ''
+        const quotationsRes = await fetch(`${baseUrl}/quotations?userId=${encodeURIComponent(user.uid)}${phoneParam}${emailParam}`)
+        if (quotationsRes.ok && active) {
+          const data = await quotationsRes.json()
+          const quotations = data.items || []
+          
+          const notifiedQuotations = JSON.parse(localStorage.getItem('notifiedQuotations') || '{}')
+          let updated = false
+
+          quotations.forEach(q => {
+            if (!notifiedQuotations[q.id]) {
+              if (Object.keys(notifiedQuotations).length > 0) {
+                batchItems.push({
+                  id: `quotation_new_${q.id}`,
+                  title: 'New Quotation Received',
+                  body: `You received a new quotation #${q.quotationNumber || q.id.slice(0,8)}.`,
+                  type: 'quotation',
+                  link: '/quotations'
+                })
+              }
+              notifiedQuotations[q.id] = q.status
+              updated = true
+            } else if (notifiedQuotations[q.id] !== q.status) {
+              if (Object.keys(notifiedQuotations).length > 0) {
+                batchItems.push({
+                  id: `quotation_${q.id}_${q.status}`,
+                  title: 'Quotation Status Update',
+                  body: `Quotation #${q.quotationNumber || q.id.slice(0,8)} is now ${q.status}.`,
+                  type: 'quotation',
+                  link: '/quotations'
+                })
+              }
+              notifiedQuotations[q.id] = q.status
+              updated = true
+            }
+          })
+          if (updated) localStorage.setItem('notifiedQuotations', JSON.stringify(notifiedQuotations))
+        }
+
+        // Dispatch batch to Context if there are new items
+        if (batchItems.length > 0 && active) {
+          addNotificationsBatch(batchItems)
+        }
+
       } catch (err) {
-        console.error('Notification check failed', err)
+        console.error('Notification check failed:', err)
       }
     }
 
@@ -110,7 +156,7 @@ export default function NotificationListener() {
       active = false
       clearInterval(interval)
     }
-  }, [user, showToast])
+  }, [user, addNotificationsBatch])
 
   return null
 }

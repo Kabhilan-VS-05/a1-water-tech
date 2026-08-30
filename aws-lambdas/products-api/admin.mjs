@@ -18,6 +18,29 @@ function safeQuery(promise) {
   });
 }
 
+// Helper to delete old S3 image to keep S3 storage under 5 GB
+async function deleteOldS3Image(imageUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string') return;
+  if (!imageUrl.includes('.amazonaws.com') && !imageUrl.includes(S3_BUCKET)) return;
+
+  try {
+    const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+    const urlObj = new URL(imageUrl);
+    const key = decodeURIComponent(urlObj.pathname.substring(1)); // remove leading slash
+
+    if (key && S3_BUCKET) {
+      const client = new S3Client({ region: S3_REGION });
+      await client.send(new DeleteObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key
+      }));
+      console.log(`Successfully deleted old S3 image from bucket: ${key}`);
+    }
+  } catch (err) {
+    console.warn('S3 Image deletion notice:', err.message);
+  }
+}
+
 function toNumber(value, fallback = 0) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
@@ -786,9 +809,14 @@ async function upsertAdminCatalogItem(getPool, collection, payload) {
 
   if (collection === 'products') {
     const existing = await safeQuery(getPool().query(
-      `select category from products where id = $1 limit 1`,
+      `select category, image_url from products where id = $1 limit 1`,
       [finalId],
     ));
+    const oldImageUrl = existing.rows[0]?.image_url
+    if (oldImageUrl && imageUrl && oldImageUrl !== imageUrl) {
+      await deleteOldS3Image(oldImageUrl)
+    }
+
     const category =
       toText(payload?.category) ||
       toText(existing.rows[0]?.category, 'Purifiers')
@@ -822,9 +850,14 @@ async function upsertAdminCatalogItem(getPool, collection, payload) {
 
   if (collection === 'services') {
     const existing = await safeQuery(getPool().query(
-      `select duration from services where id = $1 limit 1`,
+      `select duration, image_url from services where id = $1 limit 1`,
       [finalId],
     ));
+    const oldImageUrl = existing.rows[0]?.image_url
+    if (oldImageUrl && imageUrl && oldImageUrl !== imageUrl) {
+      await deleteOldS3Image(oldImageUrl)
+    }
+
     const duration =
       toText(payload?.duration) ||
       toText(existing.rows[0]?.duration, 'Per Visit')
@@ -862,13 +895,242 @@ async function upsertAdminCatalogItem(getPool, collection, payload) {
 async function deleteAdminCatalogItem(getPool, collection, itemId) {
   let result;
   if (collection === 'products') {
+    const existing = await safeQuery(getPool().query(`select image_url from products where id = $1 limit 1`, [itemId]));
+    if (existing.rows[0]?.image_url) {
+      await deleteOldS3Image(existing.rows[0].image_url)
+    }
     result = await safeQuery(getPool().query(`delete from products where id = $1`, [itemId]));
   } else if (collection === 'services') {
+    const existing = await safeQuery(getPool().query(`select image_url from services where id = $1 limit 1`, [itemId]));
+    if (existing.rows[0]?.image_url) {
+      await deleteOldS3Image(existing.rows[0].image_url)
+    }
     result = await safeQuery(getPool().query(`delete from services where id = $1`, [itemId]));
   } else {
     return null
   }
   return { id: itemId, rowCount: result.rowCount }
+}
+
+async function fetchAdminQuotations(getPool) {
+  const sql = `
+      select
+        id::text as "docId",
+        id::text as id,
+        quotation_number as "quotationNumber",
+        customer_id as "customerId",
+        customer_name as "customerName",
+        customer_phone as "customerPhone",
+        customer_address as "customerAddress",
+        customer_gst as "customerGst",
+        customer_email as "customerEmail",
+        items,
+        subtotal,
+        gst_amount as "gstAmount",
+        total,
+        status,
+        valid_until as "validUntil",
+        notes,
+        created_at as "createdAt",
+        updated_at as "updatedAt",
+        other_charge_label as "otherChargeLabel",
+        other_charge_amount as "otherChargeAmount",
+        is_other_charge_taxable as "isOtherChargeTaxable",
+        other_charge_gst_percent as "otherChargeGstPercent",
+        terms,
+        is_rounded_off as "isRoundedOff"
+      from quotations
+      order by created_at desc
+    `
+  const result = await safeQuery(getPool().query(sql));
+  return result.rows
+}
+
+async function fetchAdminQuotation(getPool, quotationId) {
+  const sql = `
+      select
+        id::text as "docId",
+        id::text as id,
+        quotation_number as "quotationNumber",
+        customer_id as "customerId",
+        customer_name as "customerName",
+        customer_phone as "customerPhone",
+        customer_address as "customerAddress",
+        customer_gst as "customerGst",
+        customer_email as "customerEmail",
+        items,
+        subtotal,
+        gst_amount as "gstAmount",
+        total,
+        status,
+        valid_until as "validUntil",
+        notes,
+        created_at as "createdAt",
+        updated_at as "updatedAt",
+        other_charge_label as "otherChargeLabel",
+        other_charge_amount as "otherChargeAmount",
+        is_other_charge_taxable as "isOtherChargeTaxable",
+        other_charge_gst_percent as "otherChargeGstPercent",
+        terms,
+        is_rounded_off as "isRoundedOff"
+      from quotations
+      where id = $1::bigint
+    `
+  const result = await safeQuery(getPool().query(sql, [quotationId]));
+  return result.rows[0] || null
+}
+
+async function createAdminQuotation(getPool, payload) {
+  if (!payload || typeof payload !== 'object') return null
+  const quotationNumber = toText(payload.quotationNumber || payload.quotation_number)
+  const customerId = toText(payload.customerId || payload.customer_id)
+  const customerName = toText(payload.customerName || payload.customer_name)
+  const customerPhone = toText(payload.customerPhone || payload.customer_phone)
+  const customerAddress = toText(payload.customerAddress || payload.customer_address)
+  const customerGst = toText(payload.customerGst || payload.customer_gst)
+  const customerEmail = toText(payload.customerEmail || payload.customer_email)
+  
+  let parsedItems = payload.items
+  if (typeof parsedItems === 'string') {
+    try { parsedItems = JSON.parse(parsedItems) } catch (e) { parsedItems = [] }
+  }
+  const items = JSON.stringify(Array.isArray(parsedItems) ? parsedItems : [])
+  
+  const subtotal = toNumber(payload.subtotal)
+  const gstAmount = toNumber(payload.gstAmount || payload.gst_amount)
+  const total = toNumber(payload.total)
+  const status = toText(payload.status, 'draft')
+  const otherChargeLabel = toText(payload.otherChargeLabel || payload.other_charge_label)
+  const otherChargeAmount = parseFloat(payload.otherChargeAmount || payload.other_charge_amount) || 0
+  const isOtherChargeTaxable = payload.isOtherChargeTaxable || payload.is_other_charge_taxable || false
+  const otherChargeGstPercent = parseFloat(payload.otherChargeGstPercent || payload.other_charge_gst_percent) || 0
+  const terms = toText(payload.terms)
+  const isRoundedOff = payload.isRoundedOff || payload.is_rounded_off || false
+
+  const validUntilRaw = payload.validUntil || payload.valid_until
+  const validUntil = validUntilRaw ? new Date(validUntilRaw).toISOString() : new Date().toISOString()
+  const notes = toText(payload.notes)
+  const createdAtRaw = payload.createdAt || payload.created_at
+  const createdAt = createdAtRaw ? new Date(createdAtRaw).toISOString() : new Date().toISOString()
+
+  // Make sure table is altered first!
+  try {
+    await getPool().query(`
+      ALTER TABLE quotations 
+      ADD COLUMN IF NOT EXISTS other_charge_label VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS other_charge_amount DECIMAL(10,2),
+      ADD COLUMN IF NOT EXISTS is_other_charge_taxable BOOLEAN DEFAULT false,
+      ADD COLUMN IF NOT EXISTS other_charge_gst_percent DECIMAL(5,2),
+      ADD COLUMN IF NOT EXISTS terms TEXT,
+      ADD COLUMN IF NOT EXISTS is_rounded_off BOOLEAN DEFAULT false;
+    `);
+  } catch (e) {}
+
+    const sql = `
+        insert into quotations (
+          quotation_number, customer_id, customer_name, customer_phone,
+          customer_address, customer_gst, customer_email, items, subtotal, gst_amount, total,
+          status, valid_until, notes, created_at, updated_at,
+          other_charge_label, other_charge_amount, is_other_charge_taxable,
+          other_charge_gst_percent, terms, is_rounded_off
+        ) values (
+          $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14, $15, now(),
+          $16, $17, $18, $19, $20, $21
+        ) returning id::text as id
+    `
+  const result = await safeQuery(getPool().query(sql, [
+    quotationNumber, customerId, customerName, customerPhone,
+    customerAddress, customerGst, customerEmail, items, subtotal, gstAmount, total,
+    status, validUntil, notes, createdAt,
+    otherChargeLabel, otherChargeAmount, isOtherChargeTaxable,
+    otherChargeGstPercent, terms, isRoundedOff
+  ]));
+  
+  if (result.rows[0]) {
+    return fetchAdminQuotation(getPool, result.rows[0].id)
+  }
+  return null
+}
+
+async function updateAdminQuotation(getPool, quotationId, payload) {
+  if (!payload || typeof payload !== 'object') return null
+  
+  if (Object.keys(payload).length === 1 && payload.status) {
+    const status = toText(payload.status)
+    const sql = `update quotations set status = $1, updated_at = now() where id = $2::bigint returning id::text as id`
+    const result = await safeQuery(getPool().query(sql, [status, quotationId]));
+    return result.rows[0] ? fetchAdminQuotation(getPool, quotationId) : null;
+  }
+
+  const quotationNumber = toText(payload.quotationNumber || payload.quotation_number)
+  const customerId = toText(payload.customerId || payload.customer_id)
+  const customerName = toText(payload.customerName || payload.customer_name)
+  const customerPhone = toText(payload.customerPhone || payload.customer_phone)
+  const customerAddress = toText(payload.customerAddress || payload.customer_address)
+  const customerGst = toText(payload.customerGst || payload.customer_gst)
+  const customerEmail = toText(payload.customerEmail || payload.customer_email)
+  
+  let parsedItems = payload.items
+  if (typeof parsedItems === 'string') {
+    try { parsedItems = JSON.parse(parsedItems) } catch (e) { parsedItems = [] }
+  }
+  const items = JSON.stringify(Array.isArray(parsedItems) ? parsedItems : [])
+  
+  const subtotal = toNumber(payload.subtotal)
+  const gstAmount = toNumber(payload.gstAmount || payload.gst_amount)
+  const total = toNumber(payload.total)
+  const status = toText(payload.status, 'draft')
+  const validUntilRaw = payload.validUntil || payload.valid_until
+  const validUntil = validUntilRaw ? new Date(validUntilRaw).toISOString() : new Date().toISOString()
+  const notes = toText(payload.notes)
+  const createdAtRaw = payload.createdAt || payload.created_at
+  const createdAt = createdAtRaw ? new Date(createdAtRaw).toISOString() : new Date().toISOString()
+
+    try {
+      await getPool().query(`
+        ALTER TABLE quotations 
+        ADD COLUMN IF NOT EXISTS other_charge_label VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS other_charge_amount DECIMAL(10,2),
+        ADD COLUMN IF NOT EXISTS is_other_charge_taxable BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS other_charge_gst_percent DECIMAL(5,2),
+        ADD COLUMN IF NOT EXISTS terms TEXT,
+        ADD COLUMN IF NOT EXISTS is_rounded_off BOOLEAN DEFAULT false;
+      `);
+    } catch (e) {}
+
+    const sql = `
+        update quotations set
+          quotation_number = $1, customer_id = $2, customer_name = $3,
+          customer_phone = $4, customer_address = $5, customer_gst = $6, customer_email = $7, items = $8::jsonb,
+          subtotal = $9, gst_amount = $10, total = $11,
+          status = $12, valid_until = $13, notes = $14,
+          other_charge_label = $15, other_charge_amount = $16, is_other_charge_taxable = $17,
+          other_charge_gst_percent = $18, terms = $19, is_rounded_off = $20,
+          updated_at = now()
+        where id = $21::bigint returning id::text as id
+    `
+    const result = await safeQuery(getPool().query(sql, [
+      quotationNumber, customerId, customerName, customerPhone,
+      customerAddress, customerGst, customerEmail, items, subtotal, gstAmount, total,
+      status, validUntil, notes,
+      payload.otherChargeLabel || payload.other_charge_label,
+      parseFloat(payload.otherChargeAmount || payload.other_charge_amount) || 0,
+      payload.isOtherChargeTaxable || payload.is_other_charge_taxable || false,
+      parseFloat(payload.otherChargeGstPercent || payload.other_charge_gst_percent) || 0,
+      toText(payload.terms),
+      payload.isRoundedOff || payload.is_rounded_off || false,
+      quotationId
+    ]));
+  
+  if (result.rows[0]) {
+    return fetchAdminQuotation(getPool, quotationId)
+  }
+  return null
+}
+
+async function deleteAdminQuotation(getPool, quotationId) {
+  const result = await safeQuery(getPool().query(`delete from quotations where id = $1::bigint`, [quotationId]));
+  return { id: quotationId, rowCount: result.rowCount }
 }
 
 async function fetchAdminBills(getPool, limitValue) {
@@ -966,20 +1228,31 @@ async function createAdminBill(getPool, payload) {
   const supportPhone = toText(config.supportPhone)
   const prefix = toText(config.invoicePrefix, 'BILL').toUpperCase()
   const gstEnabled = toBoolean(config.gstEnabled)
-  const gstRate = gstEnabled ? toNumber(config.gstRate, 0) : 0
+  const baseGstRate = gstEnabled ? toNumber(config.gstRate, 0) : 0
+
+  // Support client-provided numbers to preserve offline calculations & sequences
+  const clientSubtotal = payload?.subtotal !== undefined && payload?.subtotal !== null ? toNumber(payload.subtotal) : null
+  const clientGstAmount = (payload?.gstAmount !== undefined && payload?.gstAmount !== null)
+    ? toNumber(payload.gstAmount)
+    : ((payload?.gst_amount !== undefined && payload?.gst_amount !== null) ? toNumber(payload.gst_amount) : null)
+  const clientTotal = payload?.total !== undefined && payload?.total !== null ? toNumber(payload.total) : null
 
   // Subtotal calculation handling mobile item field names (quantity/price)
-  const subtotal = items.reduce((sum, raw) => {
+  const calculatedSubtotal = items.reduce((sum, raw) => {
     const item = raw && typeof raw === 'object' ? raw : {}
     const qty = toNumber(item.quantity || item.qty, 1)
     const price = toNumber(item.price, 0)
     return sum + (qty * price)
   }, 0)
 
-  const gstAmount = subtotal * gstRate
-  const total = subtotal + gstAmount
+  const subtotal = clientSubtotal !== null ? clientSubtotal : calculatedSubtotal
+  const gstAmount = clientGstAmount !== null ? clientGstAmount : (subtotal * baseGstRate)
+  const total = clientTotal !== null ? clientTotal : (subtotal + gstAmount)
+  const finalGstRate = baseGstRate !== 0 ? baseGstRate : (subtotal > 0 ? (gstAmount / subtotal) : 0)
+
+  const clientBillNumber = toText(payload?.billNumber || payload?.bill_number)
   const now = new Date()
-  const billNumber =
+  const billNumber = clientBillNumber ||
     `${prefix}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`
 
   const result = await safeQuery(getPool().query(
@@ -1014,7 +1287,7 @@ async function createAdminBill(getPool, payload) {
       JSON.stringify(customer),
       JSON.stringify(items),
       subtotal,
-      JSON.stringify({ gstRate, gstAmount }),
+      JSON.stringify({ gstRate: finalGstRate, gstAmount }),
       total,
       generatedBy,
       companyName,
@@ -1177,7 +1450,151 @@ async function fetchAdminMetrics(getPool, daysValue) {
   };
 }
 
+async function fetchAdminPurchaseOrders(getPool) {
+  const result = await safeQuery(getPool().query(`
+    select
+      id::text as id,
+      po_number as "poNumber",
+      customer_id as "customerId",
+      customer_name as "customerName",
+      customer_phone as "customerPhone",
+      billing_address as "billingAddress",
+      shipping_address as "shippingAddress",
+      items,
+      subtotal,
+      gst_amount as "gstAmount",
+      total,
+      delivery_date as "deliveryDate",
+      payment_terms as "paymentTerms",
+      notes,
+      status,
+      quotation_id as "quotationId",
+      created_at as "createdAt",
+      updated_at as "updatedAt"
+    from purchase_orders
+    order by created_at desc
+  `));
 
+  return result.rows;
+}
+
+async function fetchAdminPurchaseOrder(getPool, poId) {
+  const result = await safeQuery(getPool().query(`
+    select
+      id::text as id,
+      po_number as "poNumber",
+      customer_id as "customerId",
+      customer_name as "customerName",
+      customer_phone as "customerPhone",
+      billing_address as "billingAddress",
+      shipping_address as "shippingAddress",
+      items,
+      subtotal,
+      gst_amount as "gstAmount",
+      total,
+      delivery_date as "deliveryDate",
+      payment_terms as "paymentTerms",
+      notes,
+      status,
+      quotation_id as "quotationId",
+      created_at as "createdAt",
+      updated_at as "updatedAt"
+    from purchase_orders
+    where id::text = $1 or po_number = $1
+    limit 1
+  `, [poId]));
+
+  return result.rows[0] || null;
+}
+
+async function createAdminPurchaseOrder(getPool, payload) {
+  const poNumber = toText(payload?.poNumber || payload?.po_number) || `PO-${Date.now()}`;
+  const customerId = toText(payload?.customerId || payload?.customer_id);
+  const customerName = toText(payload?.customerName || payload?.customer_name, 'Unknown');
+  const customerPhone = toText(payload?.customerPhone || payload?.customer_phone);
+  const billingAddress = payload?.billingAddress || payload?.billing_address || {};
+  const shippingAddress = payload?.shippingAddress || payload?.shipping_address || {};
+  const items = Array.isArray(payload?.items) ? payload.items : (typeof payload?.items === 'string' ? JSON.parse(payload.items || '[]') : []);
+  const subtotal = toNumber(payload?.subtotal, 0);
+  const gstAmount = toNumber(payload?.gstAmount || payload?.gst_amount, 0);
+  const total = toNumber(payload?.total, 0);
+  const deliveryDate = payload?.deliveryDate || payload?.delivery_date ? new Date(payload.deliveryDate || payload.delivery_date) : null;
+  const paymentTerms = toText(payload?.paymentTerms || payload?.payment_terms);
+  const notes = toText(payload?.notes);
+  const status = toText(payload?.status, 'draft');
+  const quotationId = toText(payload?.quotationId || payload?.quotation_id);
+
+  const result = await safeQuery(getPool().query(`
+    insert into purchase_orders (
+      po_number,
+      customer_id,
+      customer_name,
+      customer_phone,
+      billing_address,
+      shipping_address,
+      items,
+      subtotal,
+      gst_amount,
+      total,
+      delivery_date,
+      payment_terms,
+      notes,
+      status,
+      quotation_id
+    ) values (
+      $1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15
+    )
+    returning
+      id::text as id,
+      po_number as "poNumber",
+      customer_id as "customerId",
+      customer_name as "customerName",
+      customer_phone as "customerPhone",
+      billing_address as "billingAddress",
+      shipping_address as "shippingAddress",
+      items,
+      subtotal,
+      gst_amount as "gstAmount",
+      total,
+      delivery_date as "deliveryDate",
+      payment_terms as "paymentTerms",
+      notes,
+      status,
+      quotation_id as "quotationId",
+      created_at as "createdAt",
+      updated_at as "updatedAt"
+  `, [
+    poNumber, customerId, customerName, customerPhone,
+    JSON.stringify(billingAddress), JSON.stringify(shippingAddress), JSON.stringify(items),
+    subtotal, gstAmount, total, deliveryDate, paymentTerms, notes, status, quotationId
+  ]));
+
+  return result.rows[0] || null;
+}
+
+async function updateAdminPurchaseOrderStatus(getPool, poId, payload) {
+  const status = toText(payload?.status, 'draft');
+  const result = await safeQuery(getPool().query(`
+    update purchase_orders
+    set status = $2, updated_at = now()
+    where id::text = $1 or po_number = $1
+    returning id::text as id, status
+  `, [poId, status]));
+
+  return result.rows[0] || null;
+}
+
+async function deleteAdminPurchaseOrder(getPool, poId) {
+  const result = await safeQuery(getPool().query(`
+    delete from purchase_orders
+    where id::text = $1 or po_number = $1
+    returning id::text as id
+  `, [poId]));
+
+  return result.rows[0] || null;
+}
+
+// =========================================================================
 export async function handleAdminRoute({
   method,
   path,
@@ -1188,9 +1605,15 @@ export async function handleAdminRoute({
   getQueryValue,
   getPathId,
 }) {
-  // TEMP DEBUG
+  // TEMP DEBUG & Migration
   if (path.includes('/admin/test')) {
     return response(200, { message: 'Admin route is working' });
+  }
+
+  if (path.includes('/admin/migrate-from-rds')) {
+    const { dumpFromRdsToSupabase } = await import('./migrate_rds_to_supabase_core.mjs')
+    const summary = await dumpFromRdsToSupabase()
+    return response(200, { summary, ok: true })
   }
 
   try {
@@ -1423,6 +1846,12 @@ export async function handleAdminRoute({
     }
 
 
+    if (method === 'POST' && path.endsWith('/admin/migrate-from-rds')) {
+      const { dumpFromRdsToSupabase } = await import('./migrate_rds_to_supabase_core.mjs')
+      const summary = await dumpFromRdsToSupabase()
+      return response(200, { summary, ok: true })
+    }
+
     if (method === 'GET' && path.endsWith('/admin/bills')) {
       return response(200, {
         items: await fetchAdminBills(getPool, getQueryValue(event, 'limit')),
@@ -1465,6 +1894,96 @@ export async function handleAdminRoute({
       return result
         ? response(200, { ...result, ok: true })
         : response(404, { message: 'Bill not found' })
+    }
+
+    // Quotations Routing
+    if (method === 'GET' && path.endsWith('/admin/quotations')) {
+      return response(200, {
+        items: await fetchAdminQuotations(getPool),
+      })
+    }
+
+    if (method === 'GET' && path.includes('/admin/quotations/')) {
+      const item = await fetchAdminQuotation(
+        getPool,
+        getPathId(path, '/admin/quotations/'),
+      )
+      return item
+        ? response(200, { item })
+        : response(404, { message: 'Quotation not found' })
+    }
+
+    if (method === 'POST' && path.endsWith('/admin/quotations')) {
+      return response(201, {
+        item: await createAdminQuotation(getPool, parseJsonBody(event?.body)),
+        ok: true,
+      })
+    }
+
+    if (method === 'PUT' && path.includes('/admin/quotations/')) {
+      const item = await updateAdminQuotation(
+        getPool,
+        getPathId(path, '/admin/quotations/'),
+        parseJsonBody(event?.body),
+      )
+      return item
+        ? response(200, { item, ok: true })
+        : response(404, { message: 'Quotation not found' })
+    }
+
+    if (method === 'DELETE' && path.includes('/admin/quotations/')) {
+      const result = await deleteAdminQuotation(
+        getPool,
+        getPathId(path, '/admin/quotations/'),
+      )
+      return result
+        ? response(200, { ...result, ok: true })
+        : response(404, { message: 'Quotation not found' })
+    }
+
+    // Purchase Orders Routing
+    if (method === 'GET' && path.endsWith('/admin/purchase-orders')) {
+      return response(200, {
+        items: await fetchAdminPurchaseOrders(getPool),
+      })
+    }
+
+    if (method === 'GET' && path.includes('/admin/purchase-orders/')) {
+      const item = await fetchAdminPurchaseOrder(
+        getPool,
+        getPathId(path, '/admin/purchase-orders/'),
+      )
+      return item
+        ? response(200, { item })
+        : response(404, { message: 'Purchase Order not found' })
+    }
+
+    if (method === 'POST' && path.endsWith('/admin/purchase-orders')) {
+      return response(201, {
+        item: await createAdminPurchaseOrder(getPool, parseJsonBody(event?.body)),
+        ok: true,
+      })
+    }
+
+    if (method === 'PUT' && path.includes('/admin/purchase-orders/')) {
+      const item = await updateAdminPurchaseOrderStatus(
+        getPool,
+        getPathId(path, '/admin/purchase-orders/'),
+        parseJsonBody(event?.body),
+      )
+      return item
+        ? response(200, { item, ok: true })
+        : response(404, { message: 'Purchase Order not found' })
+    }
+
+    if (method === 'DELETE' && path.includes('/admin/purchase-orders/')) {
+      const result = await deleteAdminPurchaseOrder(
+        getPool,
+        getPathId(path, '/admin/purchase-orders/'),
+      )
+      return result
+        ? response(200, { ...result, ok: true })
+        : response(404, { message: 'Purchase Order not found' })
     }
 
     if (method === 'GET' && path.endsWith('/admin/metrics')) {

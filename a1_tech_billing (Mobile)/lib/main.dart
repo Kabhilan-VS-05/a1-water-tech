@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'theme/app_theme.dart';
 import 'providers/app_provider.dart';
@@ -14,6 +15,8 @@ import 'package:workmanager/workmanager.dart';
 import 'services/sync_service.dart';
 import 'services/notification_service.dart';
 import 'services/auth_service.dart';
+import 'services/logger_service.dart';
+import 'config/app_config.dart';
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {
@@ -31,7 +34,7 @@ void callbackDispatcher() {
       await syncService.initialize();
       await syncService.syncAll();
     } catch (e) {
-      print("Background sync error: $e");
+      AppLogger.error("Background sync error: $e", tag: 'BackgroundSync');
     }
     return Future.value(true);
   });
@@ -40,26 +43,28 @@ void callbackDispatcher() {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  try {
-    await NotificationService().initialize();
-    await NotificationService().requestPermission();
-    
-    Workmanager().initialize(
-      callbackDispatcher,
-      isInDebugMode: false,
-    );
-    
-    // Register background task to run every 15 minutes
-    Workmanager().registerPeriodicTask(
-      "1",
-      "backgroundSyncTask",
-      frequency: const Duration(minutes: 15),
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
-    );
-  } catch (e) {
-    debugPrint("Failed to initialize background services: $e");
+  if (!kIsWeb) {
+    try {
+      await NotificationService().initialize();
+      await NotificationService().requestPermission();
+      
+      Workmanager().initialize(
+        callbackDispatcher,
+        isInDebugMode: false,
+      );
+      
+      Workmanager().registerPeriodicTask(
+        "1",
+        "backgroundSyncTask",
+        frequency: Duration(minutes: AppConfig.backgroundSyncIntervalMinutes),
+        constraints: Constraints(
+          networkType: NetworkType.connected,
+        ),
+      );
+      AppLogger.info("Background sync scheduled for every ${AppConfig.backgroundSyncIntervalMinutes} minutes", tag: 'BackgroundSync');
+    } catch (e) {
+      AppLogger.error("Failed to initialize background services: $e", tag: 'Main');
+    }
   }
   
   runApp(const A1BillingApp());

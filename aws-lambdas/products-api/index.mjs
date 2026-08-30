@@ -1,5 +1,8 @@
 import pg from 'pg'
+import dotenv from 'dotenv'
 import { handleAdminRoute } from './admin.mjs'
+
+dotenv.config()
 
 const { Pool } = pg
 
@@ -7,19 +10,31 @@ let pool
 
 function getPool() {
   if (!pool) {
-    pool = new Pool({
-      host: process.env.DB_HOST,
-      port: Number(process.env.DB_PORT || 5432),
-      database: process.env.DB_NAME || 'postgres',
-      user: process.env.DB_USER,
-      password: process.env.DB_PASSWORD,
-      ssl: {
-        rejectUnauthorized: false,
-      },
-      max: 10,
-      idleTimeoutMillis: 10000,
-      connectionTimeoutMillis: 10000,
-    })
+    if (process.env.DATABASE_URL) {
+      pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false },
+        max: 10,
+        idleTimeoutMillis: 10000,
+        connectionTimeoutMillis: 10000,
+      });
+    } else {
+      const user = process.env.DB_USER || 'postgres.vbadwfrvhyfbfableeug';
+      const pass = process.env.DB_PASSWORD || '';
+      const host = process.env.DB_HOST || 'aws-0-ap-northeast-2.pooler.supabase.com';
+      const port = process.env.DB_PORT || 6543;
+      const dbName = process.env.DB_NAME || 'postgres';
+
+      const connectionString = `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}/${dbName}`;
+
+      pool = new Pool({
+        connectionString,
+        ssl: { rejectUnauthorized: false },
+        max: 10,
+        idleTimeoutMillis: 10000,
+        connectionTimeoutMillis: 10000,
+      });
+    }
   }
 
   return pool
@@ -37,9 +52,19 @@ function response(statusCode, body) {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type,Authorization',
+      'Access-Control-Allow-Headers': '*',
       'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
+      'access-control-allow-origin': '*',
+      'access-control-allow-headers': '*',
+      'access-control-allow-methods': 'GET,POST,PUT,DELETE,OPTIONS',
     },
+    multiValueHeaders: {
+      'Access-Control-Allow-Origin': ['*'],
+      'Access-Control-Allow-Headers': ['*'],
+      'Access-Control-Allow-Methods': ['GET,POST,PUT,DELETE,OPTIONS'],
+      'Content-Type': ['application/json'],
+    },
+    isBase64Encoded: false,
     body: JSON.stringify(body, (key, value) =>
       typeof value === 'bigint' ? value.toString() : value
     ),
@@ -51,7 +76,7 @@ function getPath(event) {
 }
 
 function getMethod(event) {
-  return event?.requestContext?.http?.method || ''
+  return (event?.httpMethod || event?.requestContext?.http?.method || '').toUpperCase();
 }
 
 function parseJsonBody(body) {
@@ -228,12 +253,14 @@ async function createFeedback(payload) {
   })
 }
 
-async function fetchBookings(userId) {
+async function fetchBookings(userId, phone, email) {
   const normalizedUserId = String(userId || '').trim()
+  const normalizedPhone = String(phone || '').trim()
+  const normalizedEmail = String(email || '').trim()
 
-  if (!normalizedUserId) {
+  if (!normalizedUserId && !normalizedPhone && !normalizedEmail) {
     return response(400, {
-      message: 'userId is required',
+      message: 'userId, phone, or email is required',
     })
   }
 
@@ -251,10 +278,12 @@ async function fetchBookings(userId) {
         status,
         created_at as "createdAt"
       from bookings
-      where user_id = $1
+      where (COALESCE($1, '') != '' AND user_id = $1)
+         OR (COALESCE($2, '') != '' AND (address_snapshot->>'phone' ILIKE $2))
+         OR (COALESCE($3, '') != '' AND (address_snapshot->>'email' ILIKE $3))
       order by created_at desc
     `,
-    [normalizedUserId],
+    [normalizedUserId, normalizedPhone, normalizedEmail],
   ));
 
   return response(200, {
@@ -387,12 +416,14 @@ async function updateBookingStatus(bookingId, payload) {
   })
 }
 
-async function fetchAddresses(userId) {
+async function fetchAddresses(userId, email, phone) {
   const normalizedUserId = String(userId || '').trim()
+  const normalizedEmail = String(email || '').trim()
+  const normalizedPhone = String(phone || '').trim()
 
-  if (!normalizedUserId) {
+  if (!normalizedUserId && !normalizedEmail && !normalizedPhone) {
     return response(400, {
-      message: 'userId is required',
+      message: 'userId, email, or phone is required',
     })
   }
 
@@ -411,10 +442,12 @@ async function fetchAddresses(userId) {
         created_at as "createdAt",
         updated_at as "updatedAt"
       from user_addresses
-      where user_id = $1
+      where (COALESCE($1, '') != '' AND user_id = $1)
+         OR (COALESCE($2, '') != '' AND email ILIKE $2)
+         OR (COALESCE($3, '') != '' AND phone ILIKE $3)
       order by created_at desc
     `,
-    [normalizedUserId],
+    [normalizedUserId, normalizedEmail, normalizedPhone],
   ));
 
   return response(200, {
@@ -432,9 +465,9 @@ async function createAddress(payload) {
   const pincode = String(payload?.pincode || '').trim()
   const address = String(payload?.address || '').trim()
 
-  if (!userId || !label || !name || !phone || !email || !city || !address) {
+  if (!userId || !label || !name || !phone || !city || !address) {
     return response(400, {
-      message: 'userId, label, name, phone, email, city, and address are required',
+      message: 'userId, label, name, phone, city, and address are required',
     })
   }
 
@@ -466,6 +499,13 @@ async function createAddress(payload) {
     `,
     [userId, label, name, phone, email, city, pincode, address],
   ));
+
+  if (!result.rows || result.rows.length === 0) {
+    return response(500, {
+      message: 'Failed to create address in database',
+      ok: false,
+    })
+  }
 
   return response(201, {
     item: result.rows[0],
@@ -562,12 +602,14 @@ async function deleteAddress(addressId, userId) {
   })
 }
 
-async function fetchOrders(userId) {
+async function fetchOrders(userId, email, phone) {
   const normalizedUserId = String(userId || '').trim()
+  const normalizedEmail = String(email || '').trim()
+  const normalizedPhone = String(phone || '').trim()
 
-  if (!normalizedUserId) {
+  if (!normalizedUserId && !normalizedEmail && !normalizedPhone) {
     return response(400, {
-      message: 'userId is required',
+      message: 'userId, email, or phone is required',
     })
   }
 
@@ -588,10 +630,12 @@ async function fetchOrders(userId) {
         created_at as "createdAt",
         updated_at as "updatedAt"
       from orders
-      where user_id = $1
+      where (COALESCE($1, '') != '' AND user_id = $1)
+         OR (COALESCE($2, '') != '' AND (customer->>'email' ILIKE $2 OR address_snapshot->>'email' ILIKE $2))
+         OR (COALESCE($3, '') != '' AND (customer->>'phone' ILIKE $3 OR address_snapshot->>'phone' ILIKE $3))
       order by created_at desc
     `,
-    [normalizedUserId],
+    [normalizedUserId, normalizedEmail, normalizedPhone],
   ));
 
   return response(200, {
@@ -600,12 +644,11 @@ async function fetchOrders(userId) {
 }
 
 async function fetchTrackedOrder(userId, orderId) {
-  const normalizedUserId = String(userId || '').trim()
   const normalizedOrderId = String(orderId || '').trim()
 
-  if (!normalizedUserId || !normalizedOrderId) {
+  if (!normalizedOrderId) {
     return response(400, {
-      message: 'userId and orderId are required',
+      message: 'orderId is required',
     })
   }
 
@@ -626,10 +669,10 @@ async function fetchTrackedOrder(userId, orderId) {
         created_at as "createdAt",
         updated_at as "updatedAt"
       from orders
-      where user_id = $1 and order_id = $2
+      where order_id ILIKE $1
       limit 1
     `,
-    [normalizedUserId, normalizedOrderId],
+    [normalizedOrderId],
   ));
 
   if (result.rowCount === 0) {
@@ -702,6 +745,13 @@ async function createOrder(payload) {
       total,
     ],
   ));
+
+  if (!result.rows || result.rows.length === 0) {
+    return response(500, {
+      message: 'Failed to create order in database',
+      ok: false,
+    })
+  }
 
   return response(201, {
     item: result.rows[0],
@@ -821,6 +871,227 @@ async function clearCart(userId) {
   })
 }
 
+async function fetchQuotations(userId, phone, email) {
+  const normalizedUserId = String(userId || '').trim()
+  const normalizedPhone = String(phone || '').trim().replace(/\D/g, '')
+  const normalizedEmail = String(email || '').trim().toLowerCase()
+
+  if (!normalizedUserId && !normalizedPhone && !normalizedEmail) {
+    return response(400, {
+      message: 'userId, phone, or email is required',
+    })
+  }
+
+  const pool = getPool()
+  const phonesSet = new Set()
+  const emailsSet = new Set()
+
+  if (normalizedPhone) {
+    // Keep last 10 digits if longer (e.g. country code)
+    const p = normalizedPhone.length >= 10 ? normalizedPhone.slice(-10) : normalizedPhone
+    if (p) phonesSet.add(p)
+  }
+
+  if (normalizedEmail) {
+    emailsSet.add(normalizedEmail)
+  }
+
+  // If userId is provided, look up saved addresses and prior orders to auto-discover customer phones and emails
+  if (normalizedUserId) {
+    try {
+      const addrRes = await safeQuery(pool.query(
+        'SELECT phone, email FROM user_addresses WHERE user_id = $1',
+        [normalizedUserId]
+      ))
+      for (const row of addrRes.rows || []) {
+        if (row.phone) {
+          const digits = String(row.phone).replace(/\D/g, '')
+          const p = digits.length >= 10 ? digits.slice(-10) : digits
+          if (p) phonesSet.add(p)
+        }
+        if (row.email) {
+          const em = String(row.email).trim().toLowerCase()
+          if (em) emailsSet.add(em)
+        }
+      }
+
+      const orderRes = await safeQuery(pool.query(
+        `SELECT customer->>'phone' as phone, customer->>'email' as email, address_snapshot->>'phone' as addr_phone FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10`,
+        [normalizedUserId]
+      ))
+      for (const row of orderRes.rows || []) {
+        const orderPhone = row.phone || row.addr_phone
+        if (orderPhone) {
+          const digits = String(orderPhone).replace(/\D/g, '')
+          const p = digits.length >= 10 ? digits.slice(-10) : digits
+          if (p) phonesSet.add(p)
+        }
+        if (row.email) {
+          const em = String(row.email).trim().toLowerCase()
+          if (em) emailsSet.add(em)
+        }
+      }
+    } catch (e) {
+      console.error('Error discovering user contact info for quotations:', e)
+    }
+  }
+
+  let conditions = []
+  let params = []
+
+  if (normalizedUserId) {
+    params.push(normalizedUserId)
+    conditions.push(`customer_id = $${params.length}`)
+  }
+
+  for (const ph of phonesSet) {
+    params.push(`%${ph}%`)
+    const paramIdx = params.length
+    params.push(`cust-${ph}`)
+    const custIdParamIdx = params.length
+    conditions.push(`customer_phone LIKE $${paramIdx} OR customer_id = $${custIdParamIdx}`)
+  }
+
+  for (const em of emailsSet) {
+    params.push(em)
+    conditions.push(`LOWER(customer_email) = $${params.length}`)
+  }
+
+  if (conditions.length === 0) {
+    return response(200, { items: [] })
+  }
+
+  const whereClause = conditions.join(' OR ')
+
+  const result = await safeQuery(pool.query(
+    `
+      select
+        id::text as id,
+        quotation_number as "quotationNumber",
+        customer_id as "customerId",
+        customer_name as "customerName",
+        customer_phone as "customerPhone",
+        customer_address as "customerAddress",
+        customer_email as "customerEmail",
+        items,
+        subtotal,
+        gst_amount as "gstAmount",
+        total,
+        status,
+        valid_until as "validUntil",
+        notes,
+        created_at as "createdAt",
+        updated_at as "updatedAt",
+        other_charge_label as "otherChargeLabel",
+        other_charge_amount as "otherChargeAmount",
+        is_other_charge_taxable as "isOtherChargeTaxable",
+        other_charge_gst_percent as "otherChargeGstPercent",
+        terms,
+        is_rounded_off as "isRoundedOff"
+      from quotations
+      where ${whereClause}
+      order by created_at desc
+    `,
+    params,
+  ));
+
+  return response(200, { items: result?.rows || [] })
+}
+
+async function updateQuotationStatus(id, data) {
+  const { userId, status } = data
+  const normalizedUserId = String(userId || '').trim()
+
+  if (!normalizedUserId) {
+    return response(400, { message: 'userId is required' })
+  }
+
+  if (!status || !['accepted', 'rejected'].includes(status)) {
+    return response(400, { message: 'Invalid status' })
+  }
+
+  const pool = getPool()
+
+  const checkResult = await safeQuery(pool.query(
+    'SELECT * FROM quotations WHERE id = $1 AND customer_id = $2',
+    [id, normalizedUserId]
+  ))
+
+  if (checkResult.rows.length === 0) {
+    return response(404, { message: 'Quotation not found or unauthorized' })
+  }
+
+  const quotation = checkResult.rows[0]
+
+  if (quotation.status === 'accepted') {
+    return response(400, { message: 'Quotation is already accepted' })
+  }
+
+  if (status === 'accepted') {
+    const today = new Date()
+    const dateStr = today.toISOString().slice(2, 10).replace(/-/g, '')
+    const rand = Math.floor(100 + Math.random() * 900)
+    const orderId = `A1-${dateStr}-${rand}`
+
+    const customerObj = {
+      fullName: quotation.customer_name || '',
+      phone: quotation.customer_phone || '',
+      email: '', 
+      city: '',
+    }
+
+    const addressObj = {
+      name: quotation.customer_name || '',
+      phone: quotation.customer_phone || '',
+      address: quotation.customer_address || '',
+      label: 'Quotation Address',
+    }
+
+    const billingObj = {
+      gstRate: 0,
+      gstAmount: quotation.gst_amount || 0,
+    }
+
+    await safeQuery(pool.query(
+      `
+      insert into orders (
+        order_id,
+        user_id,
+        customer,
+        address_id,
+        address_snapshot,
+        items,
+        billing,
+        subtotal,
+        total,
+        status,
+        created_at,
+        updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
+      `,
+      [
+        orderId,
+        normalizedUserId,
+        customerObj,
+        -1,
+        addressObj,
+        quotation.items,
+        billingObj,
+        quotation.subtotal,
+        quotation.total,
+        'confirmed'
+      ]
+    ))
+  }
+
+  await safeQuery(pool.query(
+    'UPDATE quotations SET status = $1, updated_at = now() WHERE id = $2',
+    [status, id]
+  ))
+
+  return response(200, { ok: true, status })
+}
+
 export const handler = async (event) => {
   const method = getMethod(event)
   const path = getPath(event)
@@ -880,7 +1151,11 @@ export const handler = async (event) => {
     }
 
     if (method === 'GET' && path.endsWith('/bookings')) {
-      return await fetchBookings(getQueryValue(event, 'userId'))
+      return await fetchBookings(
+        getQueryValue(event, 'userId'),
+        getQueryValue(event, 'phone'),
+        getQueryValue(event, 'email')
+      )
     }
 
     if (method === 'GET' && path.endsWith('/bookings/availability')) {
@@ -903,7 +1178,11 @@ export const handler = async (event) => {
     }
 
     if (method === 'GET' && path.endsWith('/addresses')) {
-      return await fetchAddresses(getQueryValue(event, 'userId'))
+      return await fetchAddresses(
+        getQueryValue(event, 'userId'),
+        getQueryValue(event, 'email'),
+        getQueryValue(event, 'phone')
+      )
     }
 
     if (method === 'POST' && path.endsWith('/addresses')) {
@@ -932,11 +1211,30 @@ export const handler = async (event) => {
     }
 
     if (method === 'GET' && path.endsWith('/orders')) {
-      return await fetchOrders(getQueryValue(event, 'userId'))
+      return await fetchOrders(
+        getQueryValue(event, 'userId'),
+        getQueryValue(event, 'email'),
+        getQueryValue(event, 'phone')
+      )
     }
 
     if (method === 'POST' && path.endsWith('/orders')) {
       return await createOrder(parseJsonBody(event?.body))
+    }
+
+    if (method === 'GET' && path.endsWith('/quotations')) {
+      return await fetchQuotations(
+        getQueryValue(event, 'userId'),
+        getQueryValue(event, 'phone'),
+        getQueryValue(event, 'email')
+      )
+    }
+
+    if (method === 'PUT' && path.includes('/quotations/') && path.endsWith('/status')) {
+      return await updateQuotationStatus(
+        getPathId(path, '/quotations/'),
+        parseJsonBody(event?.body)
+      )
     }
 
     if (method === 'GET' && path.endsWith('/cart')) {

@@ -3,6 +3,7 @@ import { ShoppingCart, Trash2, Plus, Minus, ShieldCheck, ArrowRight } from 'luci
 import { useCart } from '../state/CartContext.jsx'
 import { useSiteSettings } from '../state/SiteSettingsContext.jsx'
 import { formatCurrency } from '../utils/format.js'
+import { getProductImage, handleImageError } from '../utils/imageUtils.js'
 
 export default function Cart() {
   const { items, updateItem, removeItem, subtotal } = useCart()
@@ -41,9 +42,9 @@ export default function Cart() {
               <div key={item.id} className="card p-4 flex gap-4 items-center">
                 <div className="w-16 h-16 bg-slate-50 rounded-lg overflow-hidden flex-shrink-0 border border-slate-100">
                   <img
-                    src={item.imageUrl || '/sample-product.jpg'}
+                    src={getProductImage(item)}
                     alt={item.name}
-                    onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = '/sample-product.jpg' }}
+                    onError={e => handleImageError(e, item.category?.toLowerCase().includes('service') ? 'service' : 'product')}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -90,25 +91,30 @@ export default function Cart() {
             <div className="card p-5 sticky top-20">
               <h2 className="text-base font-bold text-slate-900 mb-4">Order Summary</h2>
 
-              <div className="space-y-3 text-sm mb-4">
-                <div className="flex justify-between text-slate-600">
-                  <span>Subtotal ({items.length} {items.length === 1 ? 'item' : 'items'})</span>
-                  <span className="font-medium text-slate-800">{formatCurrency(subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>{gstLabel}</span>
-                  <span className="font-medium text-slate-800">{formatCurrency(gstAmount)}</span>
-                </div>
-                <div className="flex justify-between text-slate-600">
-                  <span>Delivery</span>
-                  <span className="font-medium text-emerald-600">Free</span>
-                </div>
-                <hr className="divider" />
-                <div className="flex justify-between font-bold text-slate-900 text-base">
-                  <span>Total</span>
-                  <span>{formatCurrency(total)}</span>
-                </div>
-              </div>
+              {(() => {
+                const totalItemCount = items.reduce((sum, i) => sum + (i.qty || 1), 0)
+                return (
+                  <div className="space-y-3 text-sm mb-4">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Subtotal ({totalItemCount} {totalItemCount === 1 ? 'item' : 'items'})</span>
+                      <span className="font-medium text-slate-800">{formatCurrency(subtotal)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>{gstLabel}</span>
+                      <span className="font-medium text-slate-800">{formatCurrency(gstAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-slate-600">
+                      <span>Delivery</span>
+                      <span className="font-medium text-emerald-600">Free</span>
+                    </div>
+                    <hr className="divider" />
+                    <div className="flex justify-between font-bold text-slate-900 text-base">
+                      <span>Total</span>
+                      <span>{formatCurrency(total)}</span>
+                    </div>
+                  </div>
+                )
+              })()}
 
               <Link
                 to="/checkout"

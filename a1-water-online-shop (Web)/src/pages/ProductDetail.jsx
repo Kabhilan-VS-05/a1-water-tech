@@ -12,7 +12,7 @@ export default function ProductDetail() {
   const { addItem } = useCart()
   const { showToast } = useToast()
   const { items: products } = useProducts()
-  const product = products.find(p => p.id === id)
+  const product = products.find(p => String(p.id) === String(id))
   const [adding, setAdding] = useState(false)
 
   if (!product) {

@@ -8,12 +8,15 @@ const getMillis = (value) => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-export default function useBookings(userId, refreshKey = 0) {
+export default function useBookings(userId, emailOrRefreshKey = 0, refreshKey = 0) {
   const [bookings, setBookings] = useState([])
   const [loading, setLoading] = useState(true)
 
+  const email = typeof emailOrRefreshKey === 'string' ? emailOrRefreshKey : ''
+  const actualRefreshKey = typeof emailOrRefreshKey === 'number' ? emailOrRefreshKey : refreshKey
+
   useEffect(() => {
-    if (!userId) {
+    if (!userId && !email) {
       setBookings([])
       setLoading(false)
       return
@@ -28,9 +31,11 @@ export default function useBookings(userId, refreshKey = 0) {
           throw new Error('Missing VITE_API_BASE_URL')
         }
 
-        const response = await fetch(
-          `${baseUrl}/bookings?userId=${encodeURIComponent(userId)}`,
-        )
+        const params = new URLSearchParams()
+        if (userId) params.set('userId', userId)
+        if (email) params.set('email', email)
+
+        const response = await fetch(`${baseUrl}/bookings?${params.toString()}`)
 
         if (!response.ok) {
           throw new Error(`Bookings request failed: ${response.status}`)
@@ -58,7 +63,7 @@ export default function useBookings(userId, refreshKey = 0) {
       active = false
       clearInterval(interval)
     }
-  }, [refreshKey, userId])
+  }, [actualRefreshKey, userId, email])
 
   return { bookings, loading }
 }

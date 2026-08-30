@@ -1,14 +1,16 @@
 import { useState, useMemo } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { Search, ShoppingCart, User, Menu, X, Phone, MapPin, Calendar, Truck } from 'lucide-react'
+import { Search, ShoppingCart, User, Menu, X, Phone, MapPin, Calendar, Truck, FileText, Bell } from 'lucide-react'
 import { useCart } from '../state/CartContext.jsx'
 import { useAuth } from '../state/AuthContext.jsx'
+import { useNotifications } from '../state/NotificationContext.jsx'
 import { useSiteSettings } from '../state/SiteSettingsContext.jsx'
 import brandImage from '../assets/image.png'
 
 export default function Header() {
   const { items } = useCart()
   const { user } = useAuth()
+  const { unreadCount } = useNotifications()
   const settings = useSiteSettings()
   const navigate = useNavigate()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -116,7 +118,18 @@ export default function Header() {
               Book Service
             </Link>
 
-            <Link to="/cart" className="relative p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-600">
+            {/* Notifications Bell */}
+            <Link to="/notifications" className="relative p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-600" title="Notifications">
+              <Bell className="w-5 h-5" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-rose-600 text-white text-[10px] font-bold w-4.5 h-4.5 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full border border-white animate-pulse">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Link>
+
+            {/* Shopping Cart */}
+            <Link to="/cart" className="relative p-2 rounded-lg hover:bg-slate-50 transition-colors text-slate-600" title="Cart">
               <ShoppingCart className="w-5 h-5" />
               {cartCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 bg-indigo-600 text-white text-[10px] font-bold w-4.5 h-4.5 min-w-[18px] min-h-[18px] flex items-center justify-center rounded-full border border-white">
@@ -168,8 +181,21 @@ export default function Header() {
               </NavLink>
             ))}
             <div className="pt-2 border-t border-slate-50">
+              <Link to="/notifications" onClick={() => setIsMenuOpen(false)} className="flex items-center justify-between px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 rounded-lg">
+                <span className="flex items-center gap-2.5">
+                  <Bell className="w-4 h-4 text-indigo-600" /> Notifications
+                </span>
+                {unreadCount > 0 && (
+                  <span className="bg-rose-100 text-rose-700 font-bold text-xs px-2 py-0.5 rounded-full">
+                    {unreadCount} new
+                  </span>
+                )}
+              </Link>
               <Link to="/orders" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 rounded-lg">
                 <Truck className="w-4 h-4" /> My Orders
+              </Link>
+              <Link to="/quotations" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 rounded-lg">
+                <FileText className="w-4 h-4" /> My Quotations
               </Link>
               <Link to={user ? '/profile' : '/login'} onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2.5 px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50 rounded-lg">
                 <User className="w-4 h-4" /> {user ? 'My Account' : 'Sign In'}

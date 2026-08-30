@@ -115,11 +115,11 @@ export default function Services() {
               Book a single technician visit for repairs, sanitization, water quality testing, or relocation.
             </p>
           </div>
-          <div className="flex gap-3 flex-shrink-0">
-            <Link to="/bookings" className="btn-primary px-5 py-2.5 text-sm">
+          <div className="flex flex-col sm:flex-row gap-3 flex-shrink-0 w-full sm:w-auto">
+            <Link to="/bookings" className="btn-primary px-5 py-2.5 text-sm justify-center w-full sm:w-auto">
               Book a Visit
             </Link>
-            <Link to="/contact" className="btn-secondary px-5 py-2.5 text-sm">
+            <Link to="/contact" className="btn-secondary px-5 py-2.5 text-sm justify-center w-full sm:w-auto">
               Contact Us
             </Link>
           </div>

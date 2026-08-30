@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
 import '../../services/sync_service.dart';
+import '../../services/auth_service.dart';
 import '../../utils/image_helper.dart';
 import '../../theme/app_theme.dart';
 
@@ -29,6 +30,10 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    // Rebuild FAB label when tab changes
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _searchController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -135,51 +140,48 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(130), // Increased height for search bar
-        child: AppBar(
-          elevation: 0,
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          flexibleSpace: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16, left: 16, right: 16),
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).scaffoldBackgroundColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search products and services...',
-                    hintStyle: TextStyle(color: AppTheme.textSecondaryLight),
-                    prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondaryLight),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.close, size: 20),
-                            onPressed: () => _searchController.clear(),
-                          )
-                        : null,
-                  ),
-                ),
-              ),
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: Container(
+          height: 44,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF334155)
+                  : const Color(0xFFE5E7EB),
             ),
           ),
-          bottom: TabBar(
-            controller: _tabController,
-            labelColor: AppTheme.accentColor,
-            unselectedLabelColor: AppTheme.textSecondaryLight,
-            indicatorColor: AppTheme.accentColor,
-            indicatorWeight: 3,
-            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-            tabs: const [
-              Tab(icon: Icon(Icons.inventory_2_rounded), text: 'Products'),
-              Tab(icon: Icon(Icons.handyman_rounded), text: 'Services'),
-            ],
+          child: TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              hintText: 'Search products by name...',
+              hintStyle: TextStyle(color: AppTheme.textSecondaryLight),
+              prefixIcon: const Icon(Icons.search, color: AppTheme.textSecondaryLight),
+              border: InputBorder.none,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close, size: 20),
+                      onPressed: () => _searchController.clear(),
+                    )
+                  : null,
+            ),
           ),
+        ),
+        bottom: TabBar(
+          controller: _tabController,
+          labelColor: AppTheme.accentColor,
+          unselectedLabelColor: AppTheme.textSecondaryLight,
+          indicatorColor: AppTheme.accentColor,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+          tabs: const [
+            Tab(icon: Icon(Icons.inventory_2_rounded), text: 'Products'),
+            Tab(icon: Icon(Icons.handyman_rounded), text: 'Services'),
+          ],
         ),
       ),
       body: TabBarView(
@@ -192,11 +194,11 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'catalog_fab',
         onPressed: _addItem,
-        backgroundColor: AppTheme.accentColor,
-        icon: const Icon(Icons.add, color: Colors.white),
+        backgroundColor: const Color(0xFFE91E63),
+        icon: const Icon(Icons.add_rounded, color: Colors.white),
         label: Text(
-          _tabController.index == 0 ? 'Add Product' : 'Add Service',
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+          _tabController.index == 0 ? 'ADD PRODUCT' : 'ADD SERVICE',
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5),
         ),
       ),
     );
@@ -241,12 +243,12 @@ class _CatalogScreenState extends State<CatalogScreen> with SingleTickerProvider
     }
 
     return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.7, // Adjusted for taller premium cards
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 0.72,
       ),
       itemCount: items.length,
       itemBuilder: (context, index) {
@@ -273,74 +275,80 @@ class _PremiumCatalogCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isProduct = item.type == 'product';
-    final accentColor = isProduct ? AppTheme.accentColor : const Color(0xFF8B5CF6);
+    final accentColor = isProduct 
+        ? (isDark ? const Color(0xFF38BDF8) : AppTheme.primaryColor)
+        : (isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0D9488));
 
     return Container(
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE5E7EB)),
         boxShadow: [
           BoxShadow(
-            color: AppTheme.primaryColor.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(isDark ? 0.2 : 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: onEdit,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Image Section
+              // Image Header Section
               Expanded(
                 flex: 4,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    Container(color: Theme.of(context).scaffoldBackgroundColor),
+                    Container(color: isDark ? const Color(0xFF0F172A) : Theme.of(context).scaffoldBackgroundColor),
                     ImageHelper.buildImage(
                       item.imageUrl,
                       fit: BoxFit.cover,
                       placeholder: Center(
                         child: Icon(
                           isProduct ? Icons.inventory_2_rounded : Icons.handyman_rounded,
-                          size: 48,
-                          color: accentColor.withOpacity(0.3),
+                          size: 40,
+                          color: accentColor.withOpacity(0.4),
                         ),
                       ),
                     ),
                     Positioned(
-                      top: 8,
-                      right: 8,
+                      top: 6,
+                      right: 6,
                       child: Row(
                         children: [
                           GestureDetector(
                             onTap: onEdit,
                             child: Container(
-                              padding: const EdgeInsets.all(8),
+                              padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.9),
+                                color: (isDark ? Colors.black : Colors.white).withOpacity(0.85),
                                 shape: BoxShape.circle,
-                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
                               ),
-                              child: Icon(Icons.edit_rounded, size: 16, color: accentColor),
+                              child: Icon(
+                                Icons.edit_rounded,
+                                size: 14,
+                                color: isDark ? Colors.white : AppTheme.textPrimaryLight,
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 4),
                           GestureDetector(
                             onTap: onDelete,
                             child: Container(
-                              padding: const EdgeInsets.all(8),
+                              padding: const EdgeInsets.all(6),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.9),
+                                color: (isDark ? Colors.black : Colors.white).withOpacity(0.85),
                                 shape: BoxShape.circle,
-                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)],
                               ),
-                              child: const Icon(Icons.delete_outline_rounded, size: 16, color: AppTheme.errorColor),
+                              child: const Icon(Icons.delete_outline_rounded, size: 14, color: AppTheme.errorColor),
                             ),
                           ),
                         ],
@@ -349,45 +357,55 @@ class _PremiumCatalogCard extends StatelessWidget {
                   ],
                 ),
               ),
-              
-              // Info Section
+              // Product Details Section
               Expanded(
                 flex: 3,
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(10),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         item.name,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        maxLines: 2,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          color: isDark ? Colors.white : const Color(0xFF111827),
+                        ),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      if (item.category != null) ...[
-                        const SizedBox(height: 4),
+                      if (item.category != null && item.category!.isNotEmpty)
                         Text(
                           item.category!,
-                          style: TextStyle(fontSize: 11, color: AppTheme.textSecondaryLight),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: isDark ? const Color(0xFF94A3B8) : AppTheme.textSecondaryLight,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                      const Spacer(),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
                             '₹${item.price.toStringAsFixed(0)}',
-                            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: accentColor),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 15,
+                              color: isDark ? const Color(0xFF38BDF8) : AppTheme.primaryColor,
+                            ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: BorderRadius.circular(4)),
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: accentColor.withOpacity(isDark ? 0.2 : 0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
                             child: Text(
                               '+${item.gstPercent.toStringAsFixed(0)}% GST',
-                              style: TextStyle(fontSize: 9, color: AppTheme.textSecondaryLight, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: accentColor, fontSize: 9, fontWeight: FontWeight.bold),
                             ),
                           ),
                         ],
@@ -466,10 +484,10 @@ class _AddItemDialogState extends State<_AddItemDialog> {
       setState(() => _isUploadingImage = true);
       final ext = image.path.split('.').last.toLowerCase();
 
-      final presignedResp = await http.post(
-        Uri.parse(ImageHelper.presignedUrlEndpoint),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'ext': ext, 'folder': 'catalog'}),
+      final presignedResp = await AuthService().makeAuthenticatedRequest(
+        ImageHelper.presignedUrlEndpoint,
+        method: 'POST',
+        body: {'ext': ext, 'folder': 'catalog'},
       );
 
       if (presignedResp.statusCode != 200) {

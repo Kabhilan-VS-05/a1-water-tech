@@ -4,7 +4,9 @@ import '../../providers/app_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/database_service.dart';
 import '../../services/sync_service.dart';
+import '../../services/export_service.dart';
 import '../../models/sync_result.dart';
+import 'backup_settings_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -188,6 +190,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
 
               const SizedBox(height: 32),
+              _buildSectionHeader('Data Management'),
+              ListTile(
+                leading: const Icon(Icons.backup_rounded, color: AppTheme.primaryColor),
+                title: const Text('Data Backup & Export'),
+                subtitle: const Text('Export to Excel/JSON and Cloud Storage info'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                contentPadding: EdgeInsets.zero,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const BackupSettingsScreen()),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 32),
               _buildSectionHeader('App Settings'),
               ListTile(
                 leading: const Icon(Icons.palette_rounded, color: AppTheme.accentColor),
@@ -202,10 +220,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: const Text('2.0.0 (Production)'),
                 contentPadding: EdgeInsets.zero,
               ),
+              const SizedBox(height: 40),
             ],
           ),
     );
   }
+
 
   Widget _buildSectionHeader(String title) {
     return Padding(

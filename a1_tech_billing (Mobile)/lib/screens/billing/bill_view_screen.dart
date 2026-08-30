@@ -10,12 +10,14 @@ import '../../services/pdf_service.dart';
 import 'dialogs.dart';
 
 class BillViewScreen extends StatefulWidget {
-  final String billId;
+  final String? billId;
+  final Bill? bill;
   final bool isEditable;
 
   const BillViewScreen({
     super.key,
-    required this.billId,
+    this.billId,
+    this.bill,
     this.isEditable = true,
   });
 
@@ -34,12 +36,19 @@ class _BillViewScreenState extends State<BillViewScreen> {
   final _customerNameController = TextEditingController();
   final _customerPhoneController = TextEditingController();
   final _customerAddressController = TextEditingController();
+  final _customerGstController = TextEditingController();
+  final _gstOverrideController = TextEditingController();
+
   String _selectedPaymentMode = 'pending';
   String _selectedStatus = 'draft';
   List<BillItem> _editableItems = [];
   double _subtotal = 0;
   double _gstAmount = 0;
   double _total = 0;
+  DateTime _billDate = DateTime.now();
+  
+  bool _overrideGst = false;
+  String _overrideGstType = 'percentage';
 
   @override
   void initState() {
@@ -48,41 +57,67 @@ class _BillViewScreenState extends State<BillViewScreen> {
   }
 
   Future<void> _loadBill() async {
-    final bills = await _db.getBills();
-    final bill = bills.firstWhere((b) => b.id == widget.billId);
+    Bill? bill = widget.bill;
+    if (bill == null && widget.billId != null) {
+      final bills = await _db.getBills();
+      bill = bills.firstWhere((b) => b.id == widget.billId);
+    }
+    if (bill == null) return;
+    final currentBill = bill;
 
     Customer? customer;
-    if (bill.customerId != null) {
-      customer = await _db.getCustomerById(bill.customerId!);
+    if (currentBill.customerId != null) {
+      customer = await _db.getCustomerById(currentBill.customerId!);
     }
 
     setState(() {
-      _bill = bill;
+      _bill = currentBill;
       _customer = customer;
       _isLoading = false;
 
       // Initialize controllers
-      _customerNameController.text = bill.customerName;
-      _customerPhoneController.text = bill.customerPhone ?? '';
-      _customerAddressController.text = bill.customerAddress ?? '';
-      _selectedPaymentMode = bill.paymentMode;
-      _selectedStatus = bill.status;
-      _editableItems = List.from(bill.items);
+      _customerNameController.text = currentBill.customerName;
+      _customerPhoneController.text = currentBill.customerPhone ?? '';
+      _customerAddressController.text = currentBill.customerAddress ?? '';
+      _customerGstController.text = currentBill.customerGst ?? '';
+      _selectedPaymentMode = currentBill.paymentMode;
+      _selectedStatus = currentBill.status;
+      _editableItems = List.from(currentBill.items);
+      _billDate = currentBill.createdAt;
+      
+      double itemGstSum = _editableItems.fold(0.0, (sum, item) => sum + item.gstAmount);
+      if ((currentBill.gstAmount - itemGstSum).abs() > 0.1) {
+        _overrideGst = true;
+        _overrideGstType = 'rupees';
+        _gstOverrideController.text = currentBill.gstAmount.toStringAsFixed(2);
+      }
+      
       _calculateTotals();
     });
   }
 
   void _calculateTotals() {
     double sub = 0;
-    double gst = 0;
+    double itemGstSum = 0;
     for (var item in _editableItems) {
       sub += item.price * item.quantity;
-      gst += item.gstAmount;
+      itemGstSum += item.gstAmount;
     }
     setState(() {
       _subtotal = sub;
-      _gstAmount = gst;
-      _total = sub + gst;
+      
+      if (_overrideGst && _gstOverrideController.text.isNotEmpty) {
+        final val = double.tryParse(_gstOverrideController.text) ?? 0.0;
+        if (_overrideGstType == 'percentage') {
+          _gstAmount = (sub * val) / 100;
+        } else {
+          _gstAmount = val;
+        }
+      } else {
+        _gstAmount = itemGstSum;
+      }
+      
+      _total = sub + _gstAmount;
     });
   }
 
@@ -142,6 +177,26 @@ class _BillViewScreenState extends State<BillViewScreen> {
     }
   }
 
+  Future<void> _selectDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _billDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2101),
+    );
+    if (picked != null) {
+      final time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(_billDate),
+      );
+      if (time != null) {
+        setState(() {
+          _billDate = DateTime(picked.year, picked.month, picked.day, time.hour, time.minute);
+        });
+      }
+    }
+  }
+
   Future<bool?> _showSignatureDialog() async {
     return showDialog<bool>(
       context: context,
@@ -198,12 +253,9 @@ class _BillViewScreenState extends State<BillViewScreen> {
 
     final updatedBill = _bill!.copyWith(
       customerName: _customerNameController.text,
-      customerPhone: _customerPhoneController.text.isEmpty
-          ? null
-          : _customerPhoneController.text,
-      customerAddress: _customerAddressController.text.isEmpty
-          ? null
-          : _customerAddressController.text,
+      customerPhone: _customerPhoneController.text.isEmpty ? null : _customerPhoneController.text,
+      customerAddress: _customerAddressController.text.isEmpty ? null : _customerAddressController.text,
+      customerGst: _customerGstController.text.isEmpty ? null : _customerGstController.text,
       items: _editableItems,
       subtotal: _subtotal,
       gstAmount: _gstAmount,
@@ -211,6 +263,7 @@ class _BillViewScreenState extends State<BillViewScreen> {
       status: _selectedStatus,
       paymentMode: _selectedPaymentMode,
       updatedAt: DateTime.now(),
+      createdAt: _billDate,
     );
 
     await _db.updateBill(updatedBill);
@@ -324,7 +377,24 @@ class _BillViewScreenState extends State<BillViewScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Bill #${_bill!.billNumber}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text(DateFormat('dd MMM yyyy, hh:mm a').format(_bill!.createdAt), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal, color: Colors.white70)),
+            if (_isEditing)
+              InkWell(
+                onTap: _selectDate,
+                borderRadius: BorderRadius.circular(4),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(DateFormat('dd MMM yyyy, hh:mm a').format(_billDate), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white)),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.edit_calendar, size: 16, color: Colors.white),
+                    ]
+                  ),
+                ),
+              )
+            else
+              Text(DateFormat('dd MMM yyyy, hh:mm a').format(_bill!.createdAt), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.normal, color: Colors.white70)),
           ],
         ),
         backgroundColor: primaryColor,
@@ -473,6 +543,12 @@ class _BillViewScreenState extends State<BillViewScreen> {
                         _isEditing
                             ? _buildTextField(_customerAddressController, label: 'Address', maxLines: 3)
                             : _buildInfoDetail('Address', _bill!.customerAddress ?? 'Not Provided', Icons.location_on),
+                        const SizedBox(height: 12),
+                        _isEditing
+                            ? _buildTextField(_customerGstController, label: 'Customer GSTIN (Optional)')
+                            : (_bill!.customerGst != null && _bill!.customerGst!.isNotEmpty
+                                ? _buildInfoDetail('GSTIN', _bill!.customerGst!, Icons.receipt_long)
+                                : const SizedBox.shrink()),
                         if (_customer != null && !_isEditing) ...[
                           const Divider(height: 32),
                           Row(
@@ -490,6 +566,118 @@ class _BillViewScreenState extends State<BillViewScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
+
+                  if (_isEditing) ...[
+                    _buildSectionHeader('Tax Settings', Icons.percent),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).cardColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppTheme.slate.shade200),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2)),
+                        ],
+                      ),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.calculate_outlined, size: 20, color: _overrideGst ? AppTheme.primaryColor : Colors.grey),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Custom GST Override', 
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600, 
+                                      color: _overrideGst ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black87) : Colors.grey
+                                    )
+                                  ),
+                                ],
+                              ),
+                              SizedBox(
+                                height: 24,
+                                child: Switch(
+                                  value: _overrideGst,
+                                  activeColor: AppTheme.primaryColor,
+                                  onChanged: (val) {
+                                    setState(() {
+                                      _overrideGst = val;
+                                      _calculateTotals();
+                                    });
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_overrideGst) ...[
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Divider(height: 1),
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  flex: 2,
+                                  child: DropdownButtonFormField<String>(
+                                    value: _overrideGstType,
+                                    isExpanded: true,
+                                    decoration: InputDecoration(
+                                      filled: true,
+                                      fillColor: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(color: AppTheme.slate.shade200),
+                                      ),
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(value: 'percentage', child: Text('Percent (%)', style: TextStyle(fontSize: 13))),
+                                      DropdownMenuItem(value: 'rupees', child: Text('Rupees (₹)', style: TextStyle(fontSize: 13))),
+                                    ],
+                                    onChanged: (val) {
+                                      if (val != null) {
+                                        setState(() {
+                                          _overrideGstType = val;
+                                          _calculateTotals();
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  flex: 3,
+                                  child: TextFormField(
+                                    controller: _gstOverrideController,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                                    decoration: InputDecoration(
+                                      hintText: _overrideGstType == 'percentage' ? 'e.g. 18' : 'e.g. 500',
+                                      filled: true,
+                                      fillColor: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        borderSide: BorderSide(color: AppTheme.slate.shade200),
+                                      ),
+                                    ),
+                                    onChanged: (_) {
+                                      _calculateTotals();
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
 
                   // Items List Section
                   _buildSectionHeader('Bill Items', Icons.receipt_long_outlined),

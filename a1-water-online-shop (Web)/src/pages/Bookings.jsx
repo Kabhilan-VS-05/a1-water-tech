@@ -12,9 +12,9 @@ import {
 
 export default function Bookings() {
   const { user } = useAuth()
-  const { addresses } = useAddresses(user?.uid)
+  const { addresses } = useAddresses(user?.uid, user?.email)
   const [bookingRefreshKey, setBookingRefreshKey] = useState(0)
-  const { bookings, loading: bookingsLoading } = useBookings(user?.uid, bookingRefreshKey)
+  const { bookings, loading: bookingsLoading } = useBookings(user?.uid, user?.email, bookingRefreshKey)
   const { items: services, loading: servicesLoading } = useServices()
 
   const [activeTab, setActiveTab] = useState('book')

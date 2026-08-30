@@ -66,11 +66,14 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
   }
 
   Future<void> _viewBillDetails(Bill bill) async {
-    showModalBottomSheet(
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => _BillDetailsSheet(bill: bill),
+      builder: (context) => _BillDetailsSheet(
+        bill: bill,
+        onDeleted: _loadBills, // Refresh list immediately after delete
+      ),
     );
   }
 
@@ -266,8 +269,90 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
     }
   }
 
+  String _getDateGroupHeader(DateTime date, DateTime now) {
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final yesterdayStart = todayStart.subtract(const Duration(days: 1));
+    final dateStart = DateTime(date.year, date.month, date.day);
+
+    if (dateStart == todayStart) {
+      return 'Today';
+    } else if (dateStart == yesterdayStart) {
+      return 'Yesterday';
+    }
+
+    final differenceInDays = todayStart.difference(dateStart).inDays;
+
+    if (differenceInDays > 1 && differenceInDays < 7) {
+      return DateFormat('EEEE').format(date); // e.g. Thursday, Wednesday, Tuesday
+    } else if (differenceInDays >= 7 && differenceInDays < 14) {
+      return 'Last Week';
+    } else if (date.year == now.year) {
+      return DateFormat('MMMM').format(date); // e.g. June, May, April
+    } else {
+      return DateFormat('yyyy').format(date); // e.g. 2025, 2024
+    }
+  }
+
+  List<_GroupedHistoryItem> get _groupedFilteredBills {
+    final bills = _filteredBills;
+    final List<_GroupedHistoryItem> items = [];
+    final now = DateTime.now();
+    String? lastHeader;
+
+    for (final bill in bills) {
+      final header = _getDateGroupHeader(bill.createdAt, now);
+      if (header != lastHeader) {
+        items.add(_GroupedHistoryItem(groupHeader: header, bill: bill));
+        lastHeader = header;
+      } else {
+        items.add(_GroupedHistoryItem(groupHeader: null, bill: bill));
+      }
+    }
+    return items;
+  }
+
+  Widget _buildGroupHeader(String label) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.only(top: 14, bottom: 10),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                width: 1,
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                fontSize: 12,
+                letterSpacing: 0.5,
+                color: isDark ? const Color(0xFF38BDF8) : AppTheme.primaryColor,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Divider(
+              color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+              thickness: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final groupedItems = _groupedFilteredBills;
+
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -284,15 +369,22 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
                       ? _buildEmptyState()
                       : RefreshIndicator(
                           onRefresh: _manualSync,
-                          child: ListView.separated(
-                            padding: const EdgeInsets.all(16),
-                            itemCount: _filteredBills.length,
-                            separatorBuilder: (_, _) => const SizedBox(height: 12),
+                          child: ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            itemCount: groupedItems.length,
                             itemBuilder: (context, index) {
-                              final bill = _filteredBills[index];
-                              return _PremiumBillCard(
-                                bill: bill,
-                                onTap: () => _viewBillDetails(bill),
+                              final item = groupedItems[index];
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (item.groupHeader != null)
+                                    _buildGroupHeader(item.groupHeader!),
+                                  _PremiumBillCard(
+                                    bill: item.bill,
+                                    onTap: () => _viewBillDetails(item.bill),
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
                               );
                             },
                           ),
@@ -304,20 +396,39 @@ class _BillHistoryScreenState extends State<BillHistoryScreen> {
   }
 
   Widget _buildEmptyState() {
+    final bool isFiltered = _searchQuery.isNotEmpty || _selectedDateRange != null;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.receipt_long_rounded, size: 80, color: AppTheme.dividerColorLight),
+          Icon(
+            isFiltered ? Icons.search_off_rounded : Icons.receipt_long_rounded,
+            size: 80,
+            color: AppTheme.dividerColorLight,
+          ),
           const SizedBox(height: 16),
           Text(
-            'No bills generated yet',
+            isFiltered ? 'No matching results' : 'No bills generated yet',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(color: AppTheme.textSecondaryLight),
           ),
+          if (isFiltered) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Try adjusting your search or date filter',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppTheme.textSecondaryLight),
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+class _GroupedHistoryItem {
+  final String? groupHeader;
+  final Bill bill;
+
+  _GroupedHistoryItem({this.groupHeader, required this.bill});
 }
 
 class _PremiumBillCard extends StatelessWidget {
@@ -375,7 +486,7 @@ class _PremiumBillCard extends StatelessWidget {
                           bill.isSynced ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
                           size: 16,
                           color: bill.isSynced 
-                              ? AppTheme.secondaryColor 
+                              ? (Theme.of(context).brightness == Brightness.dark ? const Color(0xFF10B981) : Colors.green[700])
                               : AppTheme.errorColor.withOpacity(0.8),
                         ),
                       ),
@@ -441,8 +552,9 @@ class _StatusBadge extends StatelessWidget {
 
 class _BillDetailsSheet extends StatelessWidget {
   final Bill bill;
+  final VoidCallback? onDeleted; // Callback to refresh parent list
 
-  const _BillDetailsSheet({required this.bill});
+  const _BillDetailsSheet({required this.bill, this.onDeleted});
 
   Future<bool?> _showSignatureDialog(BuildContext context) async {
     return showDialog<bool>(
@@ -527,45 +639,62 @@ class _BillDetailsSheet extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Theme.of(context).dividerColor),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Invoice ID', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
-                        Text(
-                          bill.id,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 8),
-                        Text('Customer', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
-                        Text(
-                          bill.customerName,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Invoice ID', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
+                          Text(
+                            bill.id,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('Date', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
+                          Text(
+                            DateFormat('MMM dd, yyyy').format(bill.createdAt),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text('Date', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
-                        Text(
-                          DateFormat('MMM dd, yyyy').format(bill.createdAt),
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Customer', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
+                            Text(
+                              bill.customerName,
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              softWrap: true,
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text('Status', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
-                        _StatusBadge(status: bill.status),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('Status', style: TextStyle(color: AppTheme.textSecondaryLight, fontSize: 12)),
+                          _StatusBadge(status: bill.status),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -696,9 +825,10 @@ class _BillDetailsSheet extends StatelessWidget {
                     await SyncService().syncOnSave(); // Try to sync delete to cloud
                     if (context.mounted) {
                       Navigator.pop(context); // Close sheet
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bill deleted')));
-                      // Note: We need a way to refresh the list. 
-                      // For now, assume the user will pull to refresh or the screen will re-load.
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Bill deleted')),
+                      );
+                      onDeleted?.call(); // Refresh the parent list
                     }
                   }
                 },

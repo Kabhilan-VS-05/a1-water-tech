@@ -9,6 +9,7 @@ import {
   RefreshCcw, Loader2, FileText, XCircle, ChevronRight,
   MapPin, CreditCard, ShoppingBag
 } from 'lucide-react'
+import { getProductImage, handleImageError } from '../utils/imageUtils.js'
 
 const formatDate = (value) => {
   if (!value) return 'Pending'
@@ -41,7 +42,7 @@ const getStatusIcon = (status) => {
 export default function Orders() {
   const { user } = useAuth()
   const [refreshKey, setRefreshKey] = useState(0)
-  const { orders, loading } = useOrders(user?.uid, refreshKey)
+  const { orders, loading } = useOrders(user?.uid, user?.email, refreshKey)
   const { items: products } = useProducts()
   const [cancelingId, setCancelingId] = useState(null)
 
@@ -295,9 +296,9 @@ export default function Orders() {
                         <div key={idx} className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-100 border border-slate-100 flex-shrink-0">
                             <img
-                              src={item.image || product?.imageUrl || '/sample-product.jpg'}
+                              src={getProductImage({ ...product, ...item, imageUrl: item.image || item.imageUrl || product?.imageUrl })}
                               alt={item.name}
-                              onError={e => { e.currentTarget.onerror = null; e.currentTarget.src = '/sample-product.jpg' }}
+                              onError={e => handleImageError(e, 'product')}
                               className="w-full h-full object-cover"
                             />
                           </div>

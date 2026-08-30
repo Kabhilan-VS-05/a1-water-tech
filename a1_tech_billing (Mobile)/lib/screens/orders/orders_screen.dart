@@ -304,13 +304,43 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
           break;
         }
       }
-      
-      // Default fallback if not found in catalog
-      final itemId = matchedService?.id ?? 'SVC-GEN';
-      final serviceName = matchedService?.name ?? booking.serviceType;
-      final price = matchedService?.price ?? 299.0; // Fallback price
-      final gstPercent = matchedService?.gstPercent ?? 18.0;
-      final imageUrl = matchedService?.imageUrl;
+
+      // If no match found, prompt admin to enter a price
+      double price;
+      double gstPercent;
+      String itemId;
+      String serviceName;
+      String? imageUrl;
+
+      if (matchedService != null) {
+        price = matchedService.price;
+        gstPercent = matchedService.gstPercent;
+        itemId = matchedService.id;
+        serviceName = matchedService.name;
+        imageUrl = matchedService.imageUrl;
+      } else {
+        // Pop the loading dialog before showing price dialog
+        if (mounted) Navigator.pop(context);
+
+        // Ask admin to manually enter a price
+        final enteredPrice = await _showPriceInputDialog(booking.serviceType);
+        if (enteredPrice == null) return; // User cancelled
+
+        price = enteredPrice;
+        gstPercent = 18.0;
+        itemId = 'SVC-GEN';
+        serviceName = booking.serviceType;
+        imageUrl = null;
+
+        // Re-show loading dialog for billing
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (BuildContext context) => const Center(child: CircularProgressIndicator()),
+          );
+        }
+      }
 
       final double totalWithoutGst = price * 1;
       final double gstAmount = (totalWithoutGst * gstPercent) / 100;
@@ -360,6 +390,54 @@ class _OrdersScreenState extends State<OrdersScreen> with SingleTickerProviderSt
         );
       }
     }
+  }
+
+  /// Shows a dialog asking admin to manually enter a price when service isn't in catalog
+  Future<double?> _showPriceInputDialog(String serviceType) async {
+    final controller = TextEditingController();
+    return showDialog<double>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Service Price Not Found'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '"$serviceType" was not found in your catalog.\nPlease enter the price manually:',
+              style: const TextStyle(fontSize: 14),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Price (₹) excluding GST',
+                prefixText: '₹ ',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final val = double.tryParse(controller.text);
+              if (val != null && val > 0) {
+                Navigator.pop(ctx, val);
+              }
+            },
+            child: const Text('Use This Price'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -738,7 +816,7 @@ class _PremiumOrderCardState extends State<_PremiumOrderCard> {
   @override
   Widget build(BuildContext context) {
     final statusColor = _getStatusColor(widget.order.status);
-    final dateFormatted = DateFormat('MMM d, yyyy • h:mm a').format(widget.order.orderDate!);
+    final dateFormatted = DateFormat('MMM d, yyyy • h:mm a').format(widget.order.orderDate);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),

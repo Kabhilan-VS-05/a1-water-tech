@@ -6,12 +6,13 @@ import { useCart } from '../state/CartContext.jsx'
 import { useSiteSettings } from '../state/SiteSettingsContext.jsx'
 import { createOrderId, formatCurrency } from '../utils/format.js'
 import { MapPin, User, Mail, Smartphone, CreditCard, Truck, Check, Loader2, ChevronRight, ShieldCheck, AlertCircle } from 'lucide-react'
+import { getProductImage, handleImageError } from '../utils/imageUtils.js'
 
 export default function Checkout() {
   const { items, subtotal, clearCart } = useCart()
   const { user } = useAuth()
   const settings = useSiteSettings()
-  const { addresses } = useAddresses(user?.uid)
+  const { addresses } = useAddresses(user?.uid, user?.email)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const navigate = useNavigate()
@@ -398,12 +399,9 @@ export default function Checkout() {
                 <div key={item.id} className="flex gap-4 items-center">
                   <div className="w-16 h-16 bg-slate-50 rounded-2xl border border-slate-100 flex-shrink-0 overflow-hidden shadow-sm">
                     <img
-                      src={item.imageUrl || '/sample-product.jpg'}
+                      src={getProductImage(item)}
                       alt={item.name}
-                      onError={(event) => {
-                        event.currentTarget.onerror = null
-                        event.currentTarget.src = '/sample-product.jpg'
-                      }}
+                      onError={(event) => handleImageError(event, item.category?.toLowerCase().includes('service') ? 'service' : 'product')}
                       className="w-full h-full object-cover"
                     />
                   </div>

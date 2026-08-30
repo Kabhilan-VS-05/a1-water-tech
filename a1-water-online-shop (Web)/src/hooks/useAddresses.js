@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
 
-export default function useAddresses(userId, refreshKey = 0) {
+export default function useAddresses(userId, emailOrRefreshKey = 0, refreshKey = 0) {
   const [addresses, setAddresses] = useState([])
   const [loading, setLoading] = useState(true)
 
+  const email = typeof emailOrRefreshKey === 'string' ? emailOrRefreshKey : ''
+  const actualRefreshKey = typeof emailOrRefreshKey === 'number' ? emailOrRefreshKey : refreshKey
+
   useEffect(() => {
-    if (!userId) {
+    if (!userId && !email) {
       setAddresses([])
       setLoading(false)
       return
@@ -20,9 +23,11 @@ export default function useAddresses(userId, refreshKey = 0) {
           throw new Error('Missing VITE_API_BASE_URL')
         }
 
-        const response = await fetch(
-          `${baseUrl}/addresses?userId=${encodeURIComponent(userId)}`,
-        )
+        const params = new URLSearchParams()
+        if (userId) params.set('userId', userId)
+        if (email) params.set('email', email)
+
+        const response = await fetch(`${baseUrl}/addresses?${params.toString()}`)
 
         if (!response.ok) {
           throw new Error(`Addresses request failed: ${response.status}`)
@@ -46,7 +51,7 @@ export default function useAddresses(userId, refreshKey = 0) {
     return () => {
       active = false
     }
-  }, [refreshKey, userId])
+  }, [actualRefreshKey, userId, email])
 
   return { addresses, loading }
 }

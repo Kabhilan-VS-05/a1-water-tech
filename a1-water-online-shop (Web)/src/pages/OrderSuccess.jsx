@@ -17,6 +17,7 @@ import {
     ShieldCheck
 } from 'lucide-react'
 import { formatCurrency } from '../utils/format'
+import { getProductImage, handleImageError } from '../utils/imageUtils.js'
 
 export default function OrderSuccess() {
     const { id } = useParams()
@@ -270,11 +271,12 @@ export default function OrderSuccess() {
                                     {orderDetails.items.map((item, idx) => (
                                         <div key={idx} className="flex items-center gap-5 p-5 bg-slate-50/50 rounded-2xl border border-slate-100">
                                             <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center shadow-sm overflow-hidden">
-                                                {item.imageUrl ? (
-                                                    <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <Package className="w-8 h-8 text-slate-300" />
-                                                )}
+                                                <img
+                                                    src={getProductImage(item)}
+                                                    alt={item.name}
+                                                    onError={(e) => handleImageError(e, item.category?.toLowerCase().includes('service') ? 'service' : 'product')}
+                                                    className="w-full h-full object-cover"
+                                                />
                                             </div>
                                             <div className="flex-1">
                                                 <p className="font-bold text-slate-900">{item.name}</p>

@@ -1,4 +1,3 @@
-import '../../utils/image_helper.dart';
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
 import '../../services/database_service.dart';
@@ -89,16 +88,43 @@ class _CustomerSearchDialogState extends State<CustomerSearchDialog> {
                             itemCount: _customers.length,
                             itemBuilder: (ctx, index) {
                               final customer = _customers[index];
+                              final isWebsite = customer.source == 'website';
                               return ListTile(
                                 leading: CircleAvatar(
-                                  backgroundColor: const Color(0xFFE0E7FF),
-                                  child: const Icon(
-                                    Icons.person,
-                                    color: Color(0xFF4F46E5),
+                                  backgroundColor: isWebsite
+                                      ? const Color(0xFFDCFCE7)
+                                      : const Color(0xFFE0E7FF),
+                                  child: Icon(
+                                    isWebsite ? Icons.language : Icons.person,
+                                    color: isWebsite
+                                        ? const Color(0xFF16A34A)
+                                        : const Color(0xFF4F46E5),
                                   ),
                                 ),
-                                title: Text(customer.name),
-                                subtitle: Text(customer.phone ?? 'No phone'),
+                                title: Row(
+                                  children: [
+                                    Expanded(child: Text(customer.name, style: const TextStyle(fontWeight: FontWeight.w600))),
+                                    if (isWebsite)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF16A34A),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: const Text(
+                                          'Website Account',
+                                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                subtitle: Text(
+                                  isWebsite && customer.email != null
+                                      ? '${customer.phone ?? ''} • ${customer.email}'
+                                      : customer.phone ?? 'No phone',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 trailing: customer.totalVisits > 0
                                     ? Chip(
                                         label: Text(
@@ -345,7 +371,7 @@ class _AddItemDialogState extends State<AddItemDialog> {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                         Text(
-                          'Rs. ${_selectedItem!.price.toStringAsFixed(0)} + ${_selectedItem!.gstPercent}% GST',
+                          '₹${_selectedItem!.price.toStringAsFixed(0)} + ${_selectedItem!.gstPercent}% GST',
                         ),
                       ],
                     ),
@@ -423,7 +449,7 @@ class _AddItemDialogState extends State<AddItemDialog> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  'Rs. ${item.price.toStringAsFixed(0)}',
+                  '₹${item.price.toStringAsFixed(0)}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(

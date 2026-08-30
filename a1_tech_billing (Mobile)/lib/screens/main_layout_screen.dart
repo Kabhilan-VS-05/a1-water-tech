@@ -19,7 +19,7 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
   final List<Widget> _screens = const [
     DashboardScreen(),
     OrdersScreen(),
-    BillingDashboardScreen(),
+    BillingDashboardScreen(showAppBar: false),
     CustomersScreen(),
     CatalogScreen(),
   ];
@@ -31,15 +31,20 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: currentIndex != 0 ? IconButton(
-          icon: const Icon(Icons.arrow_back_rounded),
-          onPressed: () => appProvider.setTabIndex(0),
-        ) : null,
+        leading: currentIndex != 0
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                tooltip: 'Back to Home',
+                onPressed: () {
+                  appProvider.setTabIndex(0);
+                },
+              )
+            : null,
         title: Text(
           currentIndex == 0 ? 'A1 Water Tech' : 
-          currentIndex == 1 ? 'Online Orders' : 
-          currentIndex == 2 ? 'Billing Center' : 
-          currentIndex == 3 ? 'Customers' : 'Catalog Management',
+          currentIndex == 1 ? 'Orders & Requests' : 
+          currentIndex == 2 ? 'Quotes & Bills' : 
+          currentIndex == 3 ? 'Clients' : 'Catalog & Services',
           style: const TextStyle(fontWeight: FontWeight.w800)
         ),
         actions: [
@@ -77,8 +82,8 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
               ), 
               label: 'Orders',
             ),
-            const BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'Billing'),
-            const BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: 'Customers'),
+            const BottomNavigationBarItem(icon: Icon(Icons.description_rounded), label: 'Quotes & Bills'),
+            const BottomNavigationBarItem(icon: Icon(Icons.people_alt_rounded), label: 'Clients'),
             const BottomNavigationBarItem(icon: Icon(Icons.inventory_2_rounded), label: 'Catalog'),
           ],
         ),

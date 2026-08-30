@@ -8,12 +8,15 @@ const getMillis = (value) => {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-export default function useOrders(userId, refreshKey = 0) {
+export default function useOrders(userId, emailOrRefreshKey = 0, refreshKey = 0) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
+  const email = typeof emailOrRefreshKey === 'string' ? emailOrRefreshKey : ''
+  const actualRefreshKey = typeof emailOrRefreshKey === 'number' ? emailOrRefreshKey : refreshKey
+
   useEffect(() => {
-    if (!userId) {
+    if (!userId && !email) {
       setOrders([])
       setLoading(false)
       return
@@ -28,9 +31,11 @@ export default function useOrders(userId, refreshKey = 0) {
           throw new Error('Missing VITE_API_BASE_URL')
         }
 
-        const response = await fetch(
-          `${baseUrl}/orders?userId=${encodeURIComponent(userId)}`,
-        )
+        const params = new URLSearchParams()
+        if (userId) params.set('userId', userId)
+        if (email) params.set('email', email)
+
+        const response = await fetch(`${baseUrl}/orders?${params.toString()}`)
 
         if (!response.ok) {
           throw new Error(`Orders request failed: ${response.status}`)
@@ -58,7 +63,7 @@ export default function useOrders(userId, refreshKey = 0) {
       active = false
       clearInterval(interval)
     }
-  }, [userId, refreshKey])
+  }, [userId, email, actualRefreshKey])
 
   return { orders, loading }
 }

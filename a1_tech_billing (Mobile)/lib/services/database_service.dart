@@ -6,7 +6,11 @@ import '../models/customer.dart';
 import '../models/catalog_item.dart';
 import '../models/order.dart';
 import '../models/booking.dart';
+import '../models/quotation.dart';
+import '../models/purchase_order.dart';
 import '../data/manual_customers_data.dart';
+import 'logger_service.dart';
+
 
 class DatabaseService {
   static final DatabaseService _instance = DatabaseService._internal();
@@ -28,7 +32,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 13,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onOpen: (db) async {
@@ -48,59 +52,265 @@ class DatabaseService {
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    AppLogger.info('Database upgrade: $oldVersion -> $newVersion', tag: 'Database');
+
     if (oldVersion < 2) {
-      // Add order_id column to orders table
       try {
         await db.execute('ALTER TABLE orders ADD COLUMN order_id TEXT');
+        AppLogger.info('Migration v2: Added order_id column', tag: 'Database');
       } catch (e) {
-        // Ignore if already exists
+        AppLogger.debug('Migration v2: order_id column likely exists (${e.toString().split('\n').first})', tag: 'Database');
       }
     }
+
     if (oldVersion < 3) {
-      // Add is_synced column to orders table
       try {
         await db.execute('ALTER TABLE orders ADD COLUMN is_synced INTEGER DEFAULT 0');
+        AppLogger.info('Migration v3: Added is_synced column', tag: 'Database');
       } catch (e) {
-        // Ignore if already exists
+        AppLogger.debug('Migration v3: is_synced column likely exists (${e.toString().split('\n').first})', tag: 'Database');
       }
     }
+
     if (oldVersion < 4) {
-      // Add source column to customers table
       try {
         await db.execute("ALTER TABLE customers ADD COLUMN source TEXT DEFAULT 'manual'");
+        AppLogger.info('Migration v4: Added source column', tag: 'Database');
       } catch (e) {
-        // Ignore if already exists
+        AppLogger.debug('Migration v4: source column likely exists (${e.toString().split('\n').first})', tag: 'Database');
       }
     }
+
     if (oldVersion < 5) {
-      // Create bookings table
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS bookings (
-          id TEXT PRIMARY KEY,
-          user_id TEXT,
-          name TEXT,
-          phone TEXT,
-          email TEXT,
-          city TEXT,
-          address TEXT,
-          service_type TEXT,
-          date TEXT,
-          slot TEXT,
-          status TEXT DEFAULT 'pending',
-          created_at TEXT,
-          confirmed_at TEXT,
-          is_synced INTEGER DEFAULT 0
-        )
-      ''');
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS bookings (
+            id TEXT PRIMARY KEY,
+            user_id TEXT,
+            name TEXT,
+            phone TEXT,
+            email TEXT,
+            city TEXT,
+            address TEXT,
+            service_type TEXT,
+            date TEXT,
+            slot TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT,
+            confirmed_at TEXT,
+            is_synced INTEGER DEFAULT 0
+          )
+        ''');
+        AppLogger.info('Migration v5: Created bookings table', tag: 'Database');
+      } catch (e) {
+        AppLogger.error('Migration v5 failed: $e', tag: 'Database');
+      }
     }
+
     if (oldVersion < 6) {
-      // Add hsn column to catalog table
       try {
         await db.execute("ALTER TABLE catalog ADD COLUMN hsn TEXT DEFAULT ''");
+        AppLogger.info('Migration v6: Added hsn column', tag: 'Database');
       } catch (e) {
-        // Ignore if already exists
+        AppLogger.debug('Migration v6: hsn column likely exists (${e.toString().split('\n').first})', tag: 'Database');
       }
     }
+
+    if (oldVersion < 7) {
+      try {
+        await db.execute('''
+          CREATE TABLE invoice_sequences (
+            date TEXT PRIMARY KEY,
+            invoice_prefix TEXT NOT NULL,
+            counter INTEGER DEFAULT 0,
+            updated_at TEXT
+          )
+        ''');
+        AppLogger.info('Migration v7: Created invoice_sequences table', tag: 'Database');
+      } catch (e) {
+        AppLogger.error('Migration v7 failed: $e', tag: 'Database');
+      }
+    }
+
+    if (oldVersion < 8) {
+      try {
+        await db.execute('''
+          CREATE TABLE quotations (
+            id TEXT PRIMARY KEY,
+            quotation_number TEXT UNIQUE,
+            customer_id TEXT,
+            customer_name TEXT NOT NULL,
+            customer_phone TEXT,
+            customer_address TEXT,
+            customer_gst TEXT,
+            items TEXT NOT NULL,
+            subtotal REAL NOT NULL,
+            gst_amount REAL NOT NULL,
+            total REAL NOT NULL,
+            status TEXT DEFAULT 'draft',
+            valid_until TEXT NOT NULL,
+            notes TEXT,
+            is_synced INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            other_charge_label TEXT,
+            other_charge_amount REAL,
+            is_other_charge_taxable INTEGER DEFAULT 0,
+            other_charge_gst_percent REAL,
+            terms TEXT,
+            is_rounded_off INTEGER DEFAULT 0
+          )
+        ''');
+        AppLogger.info('Migration v8: Created quotations table', tag: 'Database');
+      } catch (e) {
+        AppLogger.error('Migration v8 failed: $e', tag: 'Database');
+      }
+    }
+
+    if (oldVersion < 9) {
+      try {
+        await db.execute('''
+          CREATE TABLE purchase_orders (
+            id TEXT PRIMARY KEY,
+            po_number TEXT UNIQUE,
+            customer_id TEXT,
+            customer_name TEXT NOT NULL,
+            customer_phone TEXT,
+            billing_address TEXT NOT NULL,
+            shipping_address TEXT NOT NULL,
+            items TEXT NOT NULL,
+            subtotal REAL NOT NULL,
+            gst_amount REAL NOT NULL,
+            total REAL NOT NULL,
+            delivery_date TEXT,
+            payment_terms TEXT,
+            notes TEXT,
+            status TEXT DEFAULT 'draft',
+            quotation_id TEXT,
+            is_synced INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            other_charge_label TEXT,
+            other_charge_amount REAL,
+            is_other_charge_taxable INTEGER DEFAULT 0,
+            other_charge_gst_percent REAL,
+            terms TEXT,
+            is_rounded_off INTEGER DEFAULT 0
+          )
+        ''');
+        AppLogger.info('Migration v9: Created purchase_orders table', tag: 'Database');
+      } catch (e) {
+        AppLogger.error('Migration v9 failed: $e', tag: 'Database');
+      }
+    }
+
+    if (oldVersion < 10) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS invoice_sequences (
+            date TEXT PRIMARY KEY,
+            invoice_prefix TEXT NOT NULL,
+            counter INTEGER DEFAULT 0,
+            updated_at TEXT
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS quotations (
+            id TEXT PRIMARY KEY,
+            quotation_number TEXT UNIQUE,
+            customer_id TEXT,
+            customer_name TEXT NOT NULL,
+            customer_phone TEXT,
+            customer_address TEXT,
+            customer_gst TEXT,
+            customer_email TEXT,
+            items TEXT NOT NULL,
+            subtotal REAL NOT NULL,
+            gst_amount REAL NOT NULL,
+            total REAL NOT NULL,
+            status TEXT DEFAULT 'draft',
+            valid_until TEXT NOT NULL,
+            notes TEXT,
+            is_synced INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            other_charge_label TEXT,
+            other_charge_amount REAL,
+            is_other_charge_taxable INTEGER DEFAULT 0,
+            other_charge_gst_percent REAL,
+            terms TEXT,
+            is_rounded_off INTEGER DEFAULT 0
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS purchase_orders (
+            id TEXT PRIMARY KEY,
+            po_number TEXT UNIQUE,
+            customer_id TEXT,
+            customer_name TEXT NOT NULL,
+            customer_phone TEXT,
+            billing_address TEXT NOT NULL,
+            shipping_address TEXT NOT NULL,
+            items TEXT NOT NULL,
+            subtotal REAL NOT NULL,
+            gst_amount REAL NOT NULL,
+            total REAL NOT NULL,
+            delivery_date TEXT,
+            payment_terms TEXT,
+            notes TEXT,
+            status TEXT DEFAULT 'draft',
+            quotation_id TEXT,
+            is_synced INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            other_charge_label TEXT,
+            other_charge_amount REAL,
+            is_other_charge_taxable INTEGER DEFAULT 0,
+            other_charge_gst_percent REAL,
+            terms TEXT,
+            is_rounded_off INTEGER DEFAULT 0
+          )
+        ''');
+        AppLogger.info('Migration v10: Ensured quotations, purchase_orders, and invoice_sequences exist', tag: 'Database');
+      } catch (e) {
+        AppLogger.error('Migration v10 failed: $e', tag: 'Database');
+      }
+    }
+
+    if (oldVersion < 11) {
+      try {
+        await db.execute("ALTER TABLE bills ADD COLUMN customer_gst TEXT");
+        await db.execute("ALTER TABLE quotations ADD COLUMN customer_gst TEXT");
+        AppLogger.info('Migration v11: Added customer_gst column to bills and quotations', tag: 'Database');
+      } catch (e) {
+        AppLogger.debug('Migration v11: customer_gst column likely exists (${e.toString().split('\n').first})', tag: 'Database');
+      }
+    }
+
+    if (oldVersion < 12) {
+      try {
+        await db.execute("ALTER TABLE quotations ADD COLUMN customer_email TEXT");
+        AppLogger.info('Migration v12: Added customer_email column to quotations', tag: 'Database');
+      } catch (e) {
+        AppLogger.debug('Migration v12: customer_email column likely exists', tag: 'Database');
+      }
+    }
+
+    if (oldVersion < 13) {
+      try {
+        await db.execute("ALTER TABLE quotations ADD COLUMN other_charge_label TEXT");
+        await db.execute("ALTER TABLE quotations ADD COLUMN other_charge_amount REAL");
+        await db.execute("ALTER TABLE quotations ADD COLUMN is_other_charge_taxable INTEGER DEFAULT 0");
+        await db.execute("ALTER TABLE quotations ADD COLUMN other_charge_gst_percent REAL");
+        await db.execute("ALTER TABLE quotations ADD COLUMN terms TEXT");
+        await db.execute("ALTER TABLE quotations ADD COLUMN is_rounded_off INTEGER DEFAULT 0");
+        AppLogger.info('Migration v13: Added extra charges and terms to quotations', tag: 'Database');
+      } catch (e) {
+        AppLogger.debug('Migration v13: columns likely exist', tag: 'Database');
+      }
+    }
+
+    AppLogger.info('Database upgrade completed', tag: 'Database');
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -113,6 +323,7 @@ class DatabaseService {
         customer_name TEXT NOT NULL,
         customer_phone TEXT,
         customer_address TEXT,
+        customer_gst TEXT,
         items TEXT NOT NULL,
         subtotal REAL NOT NULL,
         gst_amount REAL NOT NULL,
@@ -200,6 +411,65 @@ class DatabaseService {
       )
     ''');
 
+    // Invoice Sequences
+    await db.execute('''
+      CREATE TABLE invoice_sequences (
+        date TEXT PRIMARY KEY,
+        invoice_prefix TEXT NOT NULL,
+        counter INTEGER DEFAULT 0,
+        updated_at TEXT
+      )
+    ''');
+
+    // Quotations
+    await db.execute('''
+      CREATE TABLE quotations (
+        id TEXT PRIMARY KEY,
+        quotation_number TEXT UNIQUE,
+        customer_id TEXT,
+        customer_name TEXT NOT NULL,
+        customer_phone TEXT,
+        customer_address TEXT,
+        customer_gst TEXT,
+        customer_email TEXT,
+        items TEXT NOT NULL,
+        subtotal REAL NOT NULL,
+        gst_amount REAL NOT NULL,
+        total REAL NOT NULL,
+        status TEXT DEFAULT 'draft',
+        valid_until TEXT NOT NULL,
+        notes TEXT,
+        is_synced INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+
+    // Purchase Orders
+    await db.execute('''
+      CREATE TABLE purchase_orders (
+        id TEXT PRIMARY KEY,
+        po_number TEXT UNIQUE,
+        customer_id TEXT,
+        customer_name TEXT NOT NULL,
+        customer_phone TEXT,
+        billing_address TEXT NOT NULL,
+        shipping_address TEXT NOT NULL,
+        items TEXT NOT NULL,
+        subtotal REAL NOT NULL,
+        gst_amount REAL NOT NULL,
+        total REAL NOT NULL,
+        delivery_date TEXT,
+        payment_terms TEXT,
+        notes TEXT,
+        status TEXT DEFAULT 'draft',
+        quotation_id TEXT,
+        is_synced INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+
     // Sync queue for offline changes
     await db.execute('''
       CREATE TABLE sync_queue (
@@ -225,17 +495,18 @@ class DatabaseService {
 
   Future<String> insertBill(Bill bill, {bool isSync = false}) async {
     final db = await database;
+    final billToSave = isSync ? bill.copyWith(isSynced: true) : bill;
     await db.insert(
       'bills',
-      bill.toMap(),
+      billToSave.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
     // Add to sync queue
-    if (!isSync) {
-      await _addToSyncQueue('bills', bill.id, 'insert', bill.toJson());
+    if (!isSync && !bill.isSynced) {
+      await _addToSyncQueue('bills', billToSave.id, 'insert', billToSave.toJson());
     }
-    return bill.id;
+    return billToSave.id;
   }
 
   Future<void> updateBill(Bill bill, {bool isSync = false}) async {
@@ -252,31 +523,169 @@ class DatabaseService {
     }
   }
 
+  Future<int> getInvoiceSequence(String dateStr, String prefix) async {
+    final db = await database;
+    final formattedDate = dateStr.replaceAll('-', ''); // YYYYMMDD
+    final prefixWithDate = '$prefix-$formattedDate-';
+    final pattern = '$prefixWithDate%';
+    
+    String table = 'bills';
+    String column = 'bill_number';
+    
+    if (prefix == 'QT') {
+      table = 'quotations';
+      column = 'quotation_number';
+    } else if (prefix == 'PO') {
+      table = 'purchase_orders';
+      column = 'po_number';
+    }
+
+    final result = await db.rawQuery(
+      'SELECT $column FROM $table WHERE $column LIKE ? ORDER BY $column DESC LIMIT 1',
+      [pattern],
+    );
+
+    if (result.isNotEmpty) {
+      final lastNumberStr = result.first[column] as String?;
+      if (lastNumberStr != null && lastNumberStr.startsWith(prefixWithDate)) {
+        final seqStr = lastNumberStr.substring(prefixWithDate.length);
+        final seq = int.tryParse(seqStr);
+        if (seq != null) return seq;
+      }
+    }
+    
+    return 0;
+  }
+
+  Future<void> updateInvoiceSequence(String dateStr, String prefix, int count) async {
+    // Sequence is dynamically calculated from actual bills to prevent collisions
+  }
+
   Future<void> updateLocalBillIdAndNumber(String oldId, String newId, String newBillNumber) async {
     final db = await database;
-    await db.transaction((txn) async {
-      // 1. Update bill ID, bill_number, and is_synced in 'bills' table
-      await txn.update(
-        'bills',
-        {
-          'id': newId,
-          'bill_number': newBillNumber,
-          'is_synced': 1,
-        },
-        where: 'id = ?',
-        whereArgs: [oldId],
-      );
+    if (oldId == newId) {
+      await markBillAsSynced(newId);
+      return;
+    }
 
-      // 2. Also update in the 'sync_queue' table if there are any remaining references
-      await txn.update(
-        'sync_queue',
-        {
-          'record_id': newId,
-        },
-        where: 'record_id = ? AND table_name = ?',
-        whereArgs: [oldId, 'bills'],
-      );
-    });
+    // Check if target newId already exists for a different bill in local database
+    final existing = await db.query('bills', where: 'id = ?', whereArgs: [newId]);
+    String targetId = newId;
+    String targetBillNumber = newBillNumber;
+
+    if (existing.isNotEmpty && existing.first['id'] != oldId) {
+      final uniqueSuffix = DateTime.now().millisecondsSinceEpoch.toString().substring(8);
+      targetId = '$newId-$uniqueSuffix';
+      targetBillNumber = '$newBillNumber-$uniqueSuffix';
+    }
+
+    try {
+      await db.transaction((txn) async {
+        await txn.update(
+          'bills',
+          {
+            'id': targetId,
+            'bill_number': targetBillNumber,
+            'is_synced': 1,
+          },
+          where: 'id = ?',
+          whereArgs: [oldId],
+        );
+
+        await txn.update(
+          'sync_queue',
+          {'record_id': targetId},
+          where: 'table_name = ? AND record_id = ?',
+          whereArgs: ['bills', oldId],
+        );
+      });
+    } catch (e) {
+      print('Error updating local bill ID: $e');
+    }
+  }
+
+  Future<void> updateLocalQuotationIdAndNumber(String oldId, String newId, String newNumber) async {
+    final db = await database;
+    if (oldId == newId) {
+      await markQuotationAsSynced(newId);
+      return;
+    }
+
+    final existing = await db.query('quotations', where: 'id = ?', whereArgs: [newId]);
+    String targetId = newId;
+    String targetNumber = newNumber;
+
+    if (existing.isNotEmpty && existing.first['id'] != oldId) {
+      final uniqueSuffix = DateTime.now().millisecondsSinceEpoch.toString().substring(8);
+      targetId = '$newId-$uniqueSuffix';
+      targetNumber = '$newNumber-$uniqueSuffix';
+    }
+
+    try {
+      await db.transaction((txn) async {
+        await txn.update(
+          'quotations',
+          {
+            'id': targetId,
+            'quotation_number': targetNumber,
+            'is_synced': 1,
+          },
+          where: 'id = ?',
+          whereArgs: [oldId],
+        );
+
+        await txn.update(
+          'sync_queue',
+          {'record_id': targetId},
+          where: 'table_name = ? AND record_id = ?',
+          whereArgs: ['quotations', oldId],
+        );
+      });
+    } catch (e) {
+      print('Error updating local quotation ID: $e');
+    }
+  }
+
+  Future<void> updateLocalPurchaseOrderIdAndNumber(String oldId, String newId, String newNumber) async {
+    final db = await database;
+    if (oldId == newId) {
+      await markPurchaseOrderAsSynced(newId);
+      return;
+    }
+
+    final existing = await db.query('purchase_orders', where: 'id = ?', whereArgs: [newId]);
+    String targetId = newId;
+    String targetNumber = newNumber;
+
+    if (existing.isNotEmpty && existing.first['id'] != oldId) {
+      final uniqueSuffix = DateTime.now().millisecondsSinceEpoch.toString().substring(8);
+      targetId = '$newId-$uniqueSuffix';
+      targetNumber = '$newNumber-$uniqueSuffix';
+    }
+
+    try {
+      await db.transaction((txn) async {
+        await txn.update(
+          'purchase_orders',
+          {
+            'id': targetId,
+            'po_number': targetNumber,
+            'is_synced': 1,
+          },
+          where: 'id = ?',
+          whereArgs: [oldId],
+        );
+
+        await txn.update(
+          'sync_queue',
+          {'record_id': targetId},
+          where: 'table_name = ? AND record_id = ?',
+          whereArgs: ['purchase_orders', oldId],
+        );
+      });
+    } catch (e) {
+      print('Error updating local purchase order ID: $e');
+    }
   }
 
   Future<List<Bill>> getBills({
@@ -403,6 +812,9 @@ class DatabaseService {
   Future<List<Customer>> getCustomers({String? search}) async {
     final db = await database;
 
+    // Backfill any online customers from orders and bookings table into customers
+    await syncCustomersFromOrdersAndBookings();
+
     String? whereClause;
     List<dynamic>? whereArgs;
 
@@ -419,6 +831,63 @@ class DatabaseService {
     );
 
     return List.generate(maps.length, (i) => Customer.fromMap(maps[i]));
+  }
+
+  /// Automatically populates the `customers` table with Online Clients found in `orders` and `bookings`
+  Future<void> syncCustomersFromOrdersAndBookings() async {
+    try {
+
+
+      // 1. Extract from orders
+      final orders = await getOrders();
+      for (final order in orders) {
+        if (order.customerName.isNotEmpty) {
+          final phone = (order.customerPhone != null && order.customerPhone!.isNotEmpty)
+              ? order.customerPhone!.replaceAll(RegExp(r'\D'), '')
+              : 'order-${order.id}';
+
+          final existing = await getCustomerByPhone(phone);
+          if (existing == null) {
+            final customer = Customer(
+              id: 'cust-order-$phone',
+              name: order.customerName,
+              phone: phone.startsWith('order-') ? null : phone,
+              source: 'website',
+              address: order.customerAddress,
+              createdAt: order.orderDate,
+              isSynced: true,
+            );
+            await insertCustomer(customer, isSync: true);
+          }
+        }
+      }
+
+      // 2. Extract from bookings
+      final bookings = await getBookings();
+      for (final booking in bookings) {
+        if (booking.name.isNotEmpty) {
+          final phone = booking.phone.replaceAll(RegExp(r'\D'), '');
+          final effectivePhone = phone.isNotEmpty ? phone : 'booking-${booking.id}';
+
+          final existing = await getCustomerByPhone(effectivePhone);
+          if (existing == null) {
+            final customer = Customer(
+              id: 'cust-booking-$effectivePhone',
+              name: booking.name,
+              phone: phone.isNotEmpty ? phone : null,
+              email: booking.email,
+              source: 'website',
+              address: booking.address,
+              createdAt: booking.createdAt,
+              isSynced: true,
+            );
+            await insertCustomer(customer, isSync: true);
+          }
+        }
+      }
+    } catch (e) {
+      AppLogger.error('Failed to sync customers from orders/bookings: $e', tag: 'Database');
+    }
   }
 
   Future<Customer?> getCustomerById(String id) async {
@@ -711,6 +1180,16 @@ class DatabaseService {
     await db.update('bills', {'is_synced': 1}, where: 'id = ?', whereArgs: [id]);
   }
 
+  Future<void> markQuotationAsSynced(String id) async {
+    final db = await database;
+    await db.update('quotations', {'is_synced': 1}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> markPurchaseOrderAsSynced(String id) async {
+    final db = await database;
+    await db.update('purchase_orders', {'is_synced': 1}, where: 'id = ?', whereArgs: [id]);
+  }
+
   // ==================== SETTINGS OPERATIONS ====================
 
   Future<void> setSetting(String key, String value) async {
@@ -793,6 +1272,87 @@ class DatabaseService {
       'totalBills': totalBillsResult.first['count'] ?? 0,
       'pendingBookings': pendingBookingsResult.first['count'] ?? 0,
     };
+  }
+
+  // Quotation Management
+  Future<void> insertQuotation(Quotation quotation, {bool isSync = false}) async {
+    final db = await database;
+    await db.insert(
+      'quotations', 
+      quotation.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    if (!isSync) await _addToSyncQueue('quotations', quotation.id, 'insert', jsonEncode(quotation.toMap()));
+  }
+
+  Future<List<Quotation>> getQuotations({String? status}) async {
+    final db = await database;
+    final query = status != null ? 'SELECT * FROM quotations WHERE status = ? ORDER BY created_at DESC' : 'SELECT * FROM quotations ORDER BY created_at DESC';
+    final result = await db.rawQuery(query, status != null ? [status] : []);
+    return result.map((map) => Quotation.fromMap(map)).toList();
+  }
+
+  Future<Quotation?> getQuotationById(String id) async {
+    final db = await database;
+    final result = await db.query('quotations', where: 'id = ?', whereArgs: [id]);
+    return result.isNotEmpty ? Quotation.fromMap(result.first) : null;
+  }
+
+  Future<List<Quotation>> getUnsyncedQuotations() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'quotations',
+      where: 'is_synced = ?',
+      whereArgs: [0],
+      orderBy: 'created_at ASC',
+    );
+    return List.generate(maps.length, (i) => Quotation.fromMap(maps[i]));
+  }
+
+  Future<void> updateQuotationStatus(String quotationId, String status) async {
+    final db = await database;
+    await db.update(
+      'quotations',
+      {'status': status, 'updated_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [quotationId],
+    );
+    await _addToSyncQueue('quotations', quotationId, 'update', jsonEncode({'status': status}));
+  }
+
+  // Purchase Order Management
+  Future<void> insertPurchaseOrder(PurchaseOrder po, {bool isSync = false}) async {
+    final db = await database;
+    await db.insert(
+      'purchase_orders', 
+      po.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    if (!isSync) await _addToSyncQueue('purchase_orders', po.id, 'insert', jsonEncode(po.toMap()));
+  }
+
+  Future<List<PurchaseOrder>> getPurchaseOrders({String? status}) async {
+    final db = await database;
+    final query = status != null ? 'SELECT * FROM purchase_orders WHERE status = ? ORDER BY created_at DESC' : 'SELECT * FROM purchase_orders ORDER BY created_at DESC';
+    final result = await db.rawQuery(query, status != null ? [status] : []);
+    return result.map((map) => PurchaseOrder.fromMap(map)).toList();
+  }
+
+  Future<PurchaseOrder?> getPurchaseOrderById(String id) async {
+    final db = await database;
+    final result = await db.query('purchase_orders', where: 'id = ?', whereArgs: [id]);
+    return result.isNotEmpty ? PurchaseOrder.fromMap(result.first) : null;
+  }
+
+  Future<void> updatePurchaseOrderStatus(String poId, String status) async {
+    final db = await database;
+    await db.update(
+      'purchase_orders',
+      {'status': status, 'updated_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [poId],
+    );
+    await _addToSyncQueue('purchase_orders', poId, 'update', jsonEncode({'status': status}));
   }
 
   // Close database

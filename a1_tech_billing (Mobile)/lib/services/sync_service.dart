@@ -59,9 +59,9 @@ class SyncService {
       await _triggerQuickSync();
     });
 
-    // Immediate startup checks so first notifications are not delayed.
-    await syncIfOnline();
-    await _triggerQuickSync();
+    // Immediate startup checks in background so UI renders instantly without blocking.
+    syncIfOnline();
+    _triggerQuickSync();
   }
 
   Future<void> _triggerQuickSync() async {
@@ -121,6 +121,14 @@ class SyncService {
     }
   }
 
+  // Instant trigger for freshly created bills, quotations, or orders
+  Future<SyncResult> syncOnSave() async {
+    if (_isOnline) {
+      return await syncAll();
+    }
+    return SyncResult.offline;
+  }
+
   // Main sync method
   Future<SyncResult> syncAll() async {
     if (_isSyncing) return SyncResult.alreadySyncing;
@@ -132,12 +140,10 @@ class SyncService {
     try {
       final bool authenticated = _auth.isAuthenticated;
 
-      // 1. Upload pending changes (only if authenticated)
-      if (authenticated) {
-        final uploadResult = await _uploadPendingChanges();
-        print('Upload pending changes result: $uploadResult');
-        results.add(uploadResult);
-      }
+      // 1. Upload pending changes (always upload unsynced items)
+      final uploadResult = await _uploadPendingChanges();
+      print('Upload pending changes result: $uploadResult');
+      results.add(uploadResult);
 
       // 2. Download products (public)
       final productsResult = await _syncProducts();
@@ -175,6 +181,20 @@ class SyncService {
         final billsResult = await _syncBills();
         print('Bills sync result: $billsResult');
         results.add(billsResult);
+      }
+
+      // 7.5. Download Quotations (authenticated)
+      if (authenticated) {
+        final quotationsResult = await _syncQuotations();
+        print('Quotations sync result: $quotationsResult');
+        results.add(quotationsResult);
+      }
+
+      // 7.6. Download Purchase Orders (authenticated)
+      if (authenticated) {
+        final poResult = await _syncPurchaseOrders();
+        print('Purchase Orders sync result: $poResult');
+        results.add(poResult);
       }
 
       // 8. Sync Settings (public)
@@ -262,11 +282,15 @@ class SyncService {
   // Upload pending changes from sync queue
   Future<SyncResult> _uploadPendingChanges() async {
     try {
-      // Force-backfill old/local bills that are not yet synced, even if they were
-      // created before sync_queue logic or queue rows were lost.
+      // Force-backfill old/local bills & quotations that are not yet synced
       final forceBillsResult = await _forceUploadUnsyncedBills();
       if (forceBillsResult == SyncResult.failed) {
         print('Force upload unsynced bills failed.');
+      }
+
+      final forceQuotationsResult = await _forceUploadUnsyncedQuotations();
+      if (forceQuotationsResult == SyncResult.failed) {
+        print('Force upload unsynced quotations failed.');
       }
 
       final queue = await _db.getSyncQueue();
@@ -302,7 +326,7 @@ class SyncService {
   }
 
   Future<SyncResult> _forceUploadUnsyncedBills() async {
-    if (!_auth.isAuthenticated || !_isOnline) return SyncResult.offline;
+    if (!_isOnline) return SyncResult.offline;
 
     try {
       final unsyncedBills = await _db.getUnsyncedBills();
@@ -320,11 +344,41 @@ class SyncService {
             continue;
           }
 
-          final response = await _auth.makeAuthenticatedRequest(
-            '$_adminApiUrl/bills',
-            method: 'POST',
-            body: jsonDecode(bill.toJson()),
-          );
+          final payload = {
+            'id': bill.id,
+            'billNumber': bill.billNumber,
+            'customerId': bill.customerId,
+            'customerName': bill.customerName,
+            'customerPhone': bill.customerPhone,
+            'customerAddress': bill.customerAddress,
+            'customer': {
+              'name': bill.customerName,
+              'phone': bill.customerPhone,
+              'address': bill.customerAddress,
+            },
+            'items': bill.items.map((i) => i.toMap()).toList(),
+            'subtotal': bill.subtotal,
+            'gstAmount': bill.gstAmount,
+            'total': bill.total,
+            'status': bill.status,
+            'paymentMode': bill.paymentMode,
+            'createdAt': bill.createdAt.toIso8601String(),
+          };
+
+          http.Response response;
+          if (_auth.isAuthenticated) {
+            response = await _auth.makeAuthenticatedRequest(
+              '$_adminApiUrl/bills',
+              method: 'POST',
+              body: payload,
+            );
+          } else {
+            response = await http.post(
+              Uri.parse('$_adminApiUrl/bills'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(payload),
+            );
+          }
 
           if (response.statusCode == 200 || response.statusCode == 201) {
             final Map<String, dynamic> responseData = jsonDecode(response.body);
@@ -334,9 +388,8 @@ class SyncService {
 
             if (newId.isNotEmpty && newBillNumber.isNotEmpty) {
               await _db.updateLocalBillIdAndNumber(bill.id, newId, newBillNumber);
-            } else {
-              await _db.markBillAsSynced(bill.id);
             }
+            await _db.markBillAsSynced(newId.isNotEmpty ? newId : bill.id);
             successCount++;
           } else {
             print('Force bill upload failed (${bill.id}): ${response.statusCode} ${response.body}');
@@ -357,6 +410,73 @@ class SyncService {
     }
   }
 
+  Future<SyncResult> _forceUploadUnsyncedQuotations() async {
+    if (!_isOnline) return SyncResult.offline;
+
+    try {
+      final unsyncedQuotations = await _db.getUnsyncedQuotations();
+      if (unsyncedQuotations.isEmpty) return SyncResult.success;
+
+      int successCount = 0;
+      int failCount = 0;
+
+      for (final quotation in unsyncedQuotations) {
+        try {
+          final isServerId = int.tryParse(quotation.id) != null;
+          if (isServerId && quotation.quotationNumber.isNotEmpty) {
+            await _db.markQuotationAsSynced(quotation.id);
+            successCount++;
+            continue;
+          }
+
+          final payload = quotation.toMap();
+          payload['items'] = quotation.items.map((i) => i.toMap()).toList();
+
+          http.Response response;
+          if (_auth.isAuthenticated) {
+            response = await _auth.makeAuthenticatedRequest(
+              '$_adminApiUrl/quotations',
+              method: 'POST',
+              body: payload,
+            );
+          } else {
+            response = await http.post(
+              Uri.parse('$_adminApiUrl/quotations'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(payload),
+            );
+          }
+
+          if (response.statusCode == 200 || response.statusCode == 201) {
+            final Map<String, dynamic> responseData = jsonDecode(response.body);
+            final serverItem = responseData['item'];
+            final String newId = serverItem?['id']?.toString() ?? '';
+            final String newQuotationNumber = serverItem?['quotationNumber']?.toString() ?? '';
+
+            if (newId.isNotEmpty && newQuotationNumber.isNotEmpty) {
+              await _db.updateLocalQuotationIdAndNumber(quotation.id, newId, newQuotationNumber);
+            }
+            await _db.markQuotationAsSynced(newId.isNotEmpty ? newId : quotation.id);
+            successCount++;
+          } else {
+            print('Force quotation upload failed (${quotation.id}): ${response.statusCode} ${response.body}');
+            failCount++;
+          }
+        } catch (e) {
+          print('Force quotation upload error (${quotation.id}): $e');
+          failCount++;
+        }
+      }
+
+      if (failCount == 0) return SyncResult.success;
+      if (successCount == 0) return SyncResult.failed;
+      return SyncResult.partial;
+    } catch (e) {
+      print('Force upload unsynced quotations error: $e');
+      return SyncResult.failed;
+    }
+  }
+
   // Upload single item
   Future<bool> _uploadItem(Map<String, dynamic> item) async {
     final table = item['table_name'];
@@ -370,6 +490,20 @@ class SyncService {
           endpoint = '$_adminApiUrl/bills/${payload['id'] ?? payload['docId']}';
         } else {
           endpoint = '$_adminApiUrl/bills';
+        }
+        break;
+      case 'quotations':
+        if (operation == 'update' || operation == 'delete') {
+          endpoint = '$_adminApiUrl/quotations/${payload['id'] ?? item['record_id']}';
+        } else {
+          endpoint = '$_adminApiUrl/quotations';
+        }
+        break;
+      case 'purchase_orders':
+        if (operation == 'update' || operation == 'delete') {
+          endpoint = '$_adminApiUrl/purchase-orders/${payload['id'] ?? item['record_id']}';
+        } else {
+          endpoint = '$_adminApiUrl/purchase-orders';
         }
         break;
       case 'customers':
@@ -414,25 +548,32 @@ class SyncService {
         return false;
     }
 
+    Map<String, dynamic> requestBody = Map<String, dynamic>.from(payload);
+    if ((table == 'bills' || table == 'quotations' || table == 'purchase_orders') && requestBody['items'] is String) {
+      try {
+        requestBody['items'] = jsonDecode(requestBody['items'] as String);
+      } catch (_) {}
+    }
+
     try {
       http.Response response;
 
       if (_auth.isAuthenticated) {
         // Use authenticated request
-        if ((table == 'orders' || table == 'bookings') &&
+        if ((table == 'orders' || table == 'bookings' || table == 'quotations' || table == 'purchase_orders') &&
             operation == 'update' &&
             payload['status'] != null) {
-          // For order/booking status updates, use PUT method with status endpoint
+          // For status updates, use PUT method
           response = await _auth.makeAuthenticatedRequest(
             endpoint, // endpoint already includes the ID
             method: 'PUT',
             body: {'status': payload['status']},
           );
-        } else if (table == 'bills' && operation == 'update') {
+        } else if ((table == 'bills' || table == 'quotations' || table == 'purchase_orders') && operation == 'update') {
           response = await _auth.makeAuthenticatedRequest(
             endpoint,
             method: 'PUT',
-            body: jsonDecode(item['payload']),
+            body: requestBody,
           );
         } else {
           // For other operations, use POST method
@@ -445,7 +586,7 @@ class SyncService {
             response = await _auth.makeAuthenticatedRequest(
               endpoint,
               method: 'POST',
-              body: jsonDecode(item['payload']),
+              body: requestBody,
             );
           }
         }
@@ -463,7 +604,7 @@ class SyncService {
           response = await http.put(
             Uri.parse(endpoint),
             headers: {'Content-Type': 'application/json'},
-            body: item['payload'],
+            body: jsonEncode(requestBody),
           );
         } else {
           if (operation == 'delete') {
@@ -475,7 +616,7 @@ class SyncService {
             response = await http.post(
               Uri.parse(endpoint),
               headers: {'Content-Type': 'application/json'},
-              body: item['payload'],
+              body: jsonEncode(requestBody),
             );
           }
         }
@@ -486,22 +627,46 @@ class SyncService {
 
       final bool isSuccess = response.statusCode == 200 || response.statusCode == 201;
 
-      if (isSuccess && table == 'bills' && operation == 'insert') {
-        try {
-          final Map<String, dynamic> responseData = jsonDecode(response.body);
-          final serverItem = responseData['item'];
-          if (serverItem != null) {
-            final String newId = serverItem['id']?.toString() ?? '';
-            final String newBillNumber = serverItem['billNumber']?.toString() ?? '';
-            final String oldId = item['record_id']?.toString() ?? '';
-            
-            if (newId.isNotEmpty && newBillNumber.isNotEmpty && oldId.isNotEmpty) {
-              print('Updating local SQLite bill oldId: $oldId -> newId: $newId, newBillNumber: $newBillNumber');
-              await _db.updateLocalBillIdAndNumber(oldId, newId, newBillNumber);
+      if (isSuccess && (table == 'bills' || table == 'quotations' || table == 'purchase_orders')) {
+        final String oldId = item['record_id']?.toString() ?? payload['id']?.toString() ?? '';
+        String targetId = oldId;
+
+        if (operation == 'insert') {
+          try {
+            final Map<String, dynamic> responseData = jsonDecode(response.body);
+            final serverItem = responseData['item'];
+            if (serverItem != null) {
+              final String newId = serverItem['id']?.toString() ?? '';
+              final String newNumber = serverItem['billNumber']?.toString() ?? 
+                                       serverItem['quotationNumber']?.toString() ?? 
+                                       serverItem['poNumber']?.toString() ?? '';
+              
+              if (newId.isNotEmpty && newNumber.isNotEmpty && oldId.isNotEmpty && oldId != newId) {
+                print('Updating local SQLite $table oldId: $oldId -> newId: $newId, newNumber: $newNumber');
+                if (table == 'bills') {
+                  await _db.updateLocalBillIdAndNumber(oldId, newId, newNumber);
+                } else if (table == 'quotations') {
+                  await _db.updateLocalQuotationIdAndNumber(oldId, newId, newNumber);
+                } else if (table == 'purchase_orders') {
+                  await _db.updateLocalPurchaseOrderIdAndNumber(oldId, newId, newNumber);
+                }
+                targetId = newId;
+              }
             }
+          } catch (e) {
+            print('Error updating local $table after upload: $e');
           }
-        } catch (e) {
-          print('Error updating local bill after upload: $e');
+        }
+
+        if (targetId.isNotEmpty) {
+          print('Marking $table as synced: $targetId');
+          if (table == 'bills') {
+            await _db.markBillAsSynced(targetId);
+          } else if (table == 'quotations') {
+            await _db.markQuotationAsSynced(targetId);
+          } else if (table == 'purchase_orders') {
+            await _db.markPurchaseOrderAsSynced(targetId);
+          }
         }
       }
 
@@ -628,20 +793,22 @@ class SyncService {
           final rawPhone = item['phone']?.toString();
           final source = item['source']?.toString() ?? 'website';
           
-          if (rawPhone == null || rawPhone.isEmpty) {
-            continue; // Need a phone number for local DB unique constraint
-          }
-          final phone = rawPhone.replaceAll(RegExp(r'\D'), '');
+          final String? phone = (rawPhone != null && rawPhone.isNotEmpty)
+              ? rawPhone.replaceAll(RegExp(r'\D'), '')
+              : null;
           
-          final existingCustomer = (rawId != null ? await _db.getCustomerById(rawId) : null) ?? await _db.getCustomerByPhone(phone);
+          final customerId = rawId ?? (phone != null ? 'cust-$phone' : 'cust-${item['name']}');
+
+          final existingCustomer = await _db.getCustomerById(customerId) ?? 
+              (phone != null ? await _db.getCustomerByPhone(phone) : null);
           
           if (existingCustomer == null) {
             final customer = Customer(
-              id: rawId ?? (source == 'manual' ? 'manual-$phone' : 'cust-$phone'),
-              name: item['name']?.toString() ?? 'Unknown User',
+              id: customerId,
+              name: item['name']?.toString() ?? 'Registered Client',
               phone: phone,
               email: item['email']?.toString(),
-              source: source,
+              source: source == 'manual' ? 'manual' : 'website',
               address: item['address']?.toString(),
               totalVisits: int.tryParse(item['totalVisits']?.toString() ?? '0') ?? 0,
               totalSpent: double.tryParse(item['totalSpent']?.toString() ?? '0.0') ?? 0.0,
@@ -655,7 +822,7 @@ class SyncService {
             await _db.updateCustomer(existingCustomer.copyWith(
               email: item['email']?.toString() ?? existingCustomer.email,
               name: item['name']?.toString() ?? existingCustomer.name,
-              source: source,
+              source: source == 'manual' ? 'manual' : 'website',
               address: item['address']?.toString() ?? existingCustomer.address,
               totalVisits: int.tryParse(item['totalVisits']?.toString() ?? '0') ?? existingCustomer.totalVisits,
               totalSpent: double.tryParse(item['totalSpent']?.toString() ?? '0.0') ?? existingCustomer.totalSpent,
@@ -749,32 +916,34 @@ class SyncService {
           
           print('Checking customer for order: ${order.customerName} - Phone: ${order.customerPhone} - Email: $email - UserId: $userId');
           
-          if (order.customerPhone != null && order.customerPhone!.isNotEmpty) {
-            final existingCustomer = await _db.getCustomerByPhone(order.customerPhone!);
-            
-            // Only auto-create if not exists OR if we now have an email/userId for an existing one
+          if (order.customerName.isNotEmpty) {
+            final String? phone = (order.customerPhone != null && order.customerPhone!.isNotEmpty)
+                ? order.customerPhone!.replaceAll(RegExp(r'\D'), '')
+                : null;
+            final custId = phone != null ? 'cust-$phone' : 'cust-order-${order.id}';
+
+            final existingCustomer = (phone != null ? await _db.getCustomerByPhone(phone) : null) ??
+                await _db.getCustomerById(custId);
+
             if (existingCustomer == null) {
-              // Only auto-create "Website" customers if they have a userId (Cognito accounts)
-              // Others will stay as part of the order but won't clutter the Customers list 
-              // unless they are manually added as Walk-in.
-              if (userId != null && userId.isNotEmpty) {
-                final customer = Customer(
-                  id: 'cust-${order.customerPhone}',
-                  name: order.customerName,
-                  phone: order.customerPhone,
-                  email: email,
-                  source: 'website',
-                  address: order.customerAddress,
-                  createdAt: DateTime.now(),
-                  isSynced: true,
-                );
-                await _db.insertCustomer(customer, isSync: true);
-                print('Added Website customer from order: ${customer.name}');
-              }
+              final customer = Customer(
+                id: custId,
+                name: order.customerName,
+                phone: phone,
+                email: email,
+                source: 'website',
+                address: order.customerAddress,
+                createdAt: order.orderDate,
+                isSynced: true,
+              );
+              await _db.insertCustomer(customer, isSync: true);
+              print('Added Online Client from order: ${customer.name}');
             } else {
-              // If exists, ensure it's marked as website if it has a userId
-              if (userId != null && userId.isNotEmpty && existingCustomer.source != 'website') {
-                await _db.updateCustomer(existingCustomer.copyWith(email: email ?? existingCustomer.email, source: 'website'), isSync: true);
+              if (existingCustomer.source != 'website') {
+                await _db.updateCustomer(existingCustomer.copyWith(
+                  email: email ?? existingCustomer.email,
+                  source: 'website',
+                ), isSync: true);
               }
             }
           }
@@ -796,10 +965,19 @@ class SyncService {
 
   Future<SyncResult> forceSyncAllBillsToCloud() async {
     if (!_isOnline) return SyncResult.offline;
-    if (!_auth.isAuthenticated) return SyncResult.failed;
 
     final upload = await _forceUploadUnsyncedBills();
     final pull = await _syncBills();
+
+    // Auto-heal: ensure all bills downloaded or formatted with server bill number are marked as synced
+    try {
+      final allBills = await _db.getBills();
+      for (final bill in allBills) {
+        if (!bill.isSynced && (bill.billNumber.startsWith('BILL-') || int.tryParse(bill.id) != null)) {
+          await _db.markBillAsSynced(bill.id);
+        }
+      }
+    } catch (_) {}
 
     if (upload == SyncResult.success && pull == SyncResult.success) {
       return SyncResult.success;
@@ -810,23 +988,7 @@ class SyncService {
     return SyncResult.partial;
   }
 
-  // Call this after any local save to sync immediately if online
-  Future<SyncResult> syncOnSave() async {
-    if (_isOnline && !_isSyncing) {
-      print('Auto-sync triggered after local save...');
-      // Small delay to let UI update first
-      await Future.delayed(const Duration(milliseconds: 500));
-      final result = await syncAll();
-      print('Auto-sync completed: ${result.message}');
-      return result;
-    } else if (!_isOnline) {
-      print('Device offline - changes queued for next sync');
-      return SyncResult.offline;
-    } else {
-      print('Sync already in progress - changes queued');
-      return SyncResult.alreadySyncing;
-    }
-  }
+
 
   // Sync bookings from server
   Future<SyncResult> _syncBookings() async {
@@ -865,6 +1027,31 @@ class SyncService {
             }
 
             await _db.insertBooking(booking);
+
+            // Auto-save booking customer as Online Client
+            if (booking.name.isNotEmpty) {
+              final String? phone = booking.phone.isNotEmpty
+                  ? booking.phone.replaceAll(RegExp(r'\D'), '')
+                  : null;
+              final custId = phone != null ? 'cust-$phone' : 'cust-booking-${booking.id}';
+
+              final existingCust = (phone != null ? await _db.getCustomerByPhone(phone) : null) ??
+                  await _db.getCustomerById(custId);
+
+              if (existingCust == null) {
+                final customer = Customer(
+                  id: custId,
+                  name: booking.name,
+                  phone: phone,
+                  email: booking.email,
+                  source: 'website',
+                  address: booking.address,
+                  createdAt: booking.createdAt,
+                  isSynced: true,
+                );
+                await _db.insertCustomer(customer, isSync: true);
+              }
+            }
             print('Synced booking: ${booking.id} - ${booking.name} - Status: ${booking.status}');
           } catch (e) {
             print('Error parsing booking: $e - Data: $item');
@@ -889,10 +1076,18 @@ class SyncService {
 
       print('Syncing bills from: $_adminApiUrl/bills');
       
-      final response = await _auth.makeAuthenticatedRequest(
-        '$_adminApiUrl/bills',
-        method: 'GET',
-      );
+      http.Response response;
+      if (_auth.isAuthenticated) {
+        response = await _auth.makeAuthenticatedRequest(
+          '$_adminApiUrl/bills',
+          method: 'GET',
+        );
+      } else {
+        response = await http.get(
+          Uri.parse('$_adminApiUrl/bills'),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
       if (response.statusCode == 200) {
         final Map<String, dynamic> responseData = jsonDecode(response.body);
@@ -901,8 +1096,9 @@ class SyncService {
 
         for (final item in data) {
           try {
-            final bill = Bill.fromMap(item);
+            final bill = Bill.fromMap(item).copyWith(isSynced: true);
             await _db.insertBill(bill, isSync: true);
+            await _db.markBillAsSynced(bill.id);
           } catch (e) {
             print('Error parsing bill: $e - Data: $item');
           }
@@ -912,6 +1108,82 @@ class SyncService {
       return SyncResult.failed;
     } catch (e) {
       print('Sync bills error: $e');
+      return SyncResult.failed;
+    }
+  }
+
+  // Sync quotations from server
+  Future<SyncResult> _syncQuotations() async {
+    try {
+      if (!_isOnline) return SyncResult.offline;
+
+      print('Syncing quotations from: $_adminApiUrl/quotations');
+      
+      http.Response response;
+      if (_auth.isAuthenticated) {
+        response = await _auth.makeAuthenticatedRequest(
+          '$_adminApiUrl/quotations',
+          method: 'GET',
+        );
+      } else {
+        response = await http.get(
+          Uri.parse('$_adminApiUrl/quotations'),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final List<dynamic> data = responseData['items'] ?? [];
+        print('Found ${data.length} quotations from server');
+
+        for (final item in data) {
+          try {
+            final quotation = Quotation.fromMap(item);
+            await _db.insertQuotation(quotation, isSync: true);
+          } catch (e) {
+            print('Error parsing quotation: $e - Data: $item');
+          }
+        }
+        return SyncResult.success;
+      }
+      return SyncResult.failed;
+    } catch (e) {
+      print('Sync quotations error: $e');
+      return SyncResult.failed;
+    }
+  }
+
+  // Sync purchase orders from server
+  Future<SyncResult> _syncPurchaseOrders() async {
+    try {
+      if (!_isOnline) return SyncResult.offline;
+
+      print('Syncing purchase orders from: $_adminApiUrl/purchase-orders');
+      
+      final response = await _auth.makeAuthenticatedRequest(
+        '$_adminApiUrl/purchase-orders',
+        method: 'GET',
+      );
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> responseData = jsonDecode(response.body);
+        final List<dynamic> data = responseData['items'] ?? [];
+        print('Found ${data.length} purchase orders from server');
+
+        for (final item in data) {
+          try {
+            final po = PurchaseOrder.fromMap(item);
+            await _db.insertPurchaseOrder(po, isSync: true);
+          } catch (e) {
+            print('Error parsing purchase order: $e - Data: $item');
+          }
+        }
+        return SyncResult.success;
+      }
+      return SyncResult.failed;
+    } catch (e) {
+      print('Sync purchase orders error: $e');
       return SyncResult.failed;
     }
   }
@@ -945,7 +1217,12 @@ class SyncService {
           if (data['invoicePrefix'] != null) await _db.setSetting('invoicePrefix', data['invoicePrefix'].toString());
           if (data['gstRate'] != null) {
             final rate = (double.tryParse(data['gstRate'].toString()) ?? 0) * 100;
-            await _db.setSetting('defaultGstRate', rate.toInt().toString());
+            // Only overwrite local default if cloud has a non-zero rate.
+            // A cloud value of 0 means the setting was never configured,
+            // so we preserve the local default (typically 18%).
+            if (rate > 0) {
+              await _db.setSetting('defaultGstRate', rate.toInt().toString());
+            }
           }
           if (data['gstEnabled'] != null) await _db.setSetting('gstEnabled', data['gstEnabled'].toString());
         }

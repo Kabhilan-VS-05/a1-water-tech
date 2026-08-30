@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../providers/app_provider.dart';
-import '../models/models.dart';
 import '../services/database_service.dart';
-import '../services/sync_service.dart';
-import '../models/sync_result.dart';
-import '../theme/app_theme.dart';
-import 'billing/bill_view_screen.dart';
-import '../services/notification_service.dart';
+import 'settings/business_info_screen.dart';
+import 'settings/settings_screen.dart';
+import 'terms/terms_screen.dart';
+import 'customers/customers_screen.dart';
+import 'catalog/catalog_screen.dart';
+import 'quotation/quotation_screen.dart';
+import 'billing/manual_billing_screen.dart';
+import 'billing/billing_dashboard_screen.dart';
+import 'purchase_order/purchase_order_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -18,439 +19,271 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final DatabaseService _db = DatabaseService();
-  final SyncService _sync = SyncService();
-  Map<String, dynamic> _stats = {
-    'weeklyRevenue': 0.0,
-    'todayBills': 0,
-    'pendingOrders': 0,
-    'pendingBills': 0,
-  };
-  List<Bill> _recentBills = [];
-  bool _isLoading = true;
-  bool _isSyncing = false;
+  String _businessName = 'A1 water';
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-    
-    // Request notification permission if not already done
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await NotificationService().requestPermission();
-    });
+    _loadBusinessName();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    
-    // Load local stats first (fast)
-    final localStats = await _db.getDashboardStats();
-    final recentBills = await _db.getBills(limit: 5);
-    
-    if (mounted) {
-      setState(() {
-        _stats = localStats;
-        _recentBills = recentBills;
-        _isLoading = false;
-      });
-    }
-
-    // Then try to fetch fresh remote metrics if online
-    _fetchRemoteStats();
-  }
-
-  Future<void> _fetchRemoteStats() async {
-    if (!_sync.isOnline) return;
-
-    final remoteMetrics = await _sync.getRemoteMetrics(days: 7);
-    final localStats = await _db.getDashboardStats();
-    
-    if (mounted) {
-      setState(() {
-        if (remoteMetrics != null) {
-          _stats = {
-            ...localStats,
-            'weeklyRevenue': (remoteMetrics['revenueInRange'] ?? remoteMetrics['totalRevenue'] ?? 0.0).toDouble(),
-            'todayBills': remoteMetrics['salesCountInRange'] ?? remoteMetrics['salesCount'] ?? 0,
-            'pendingOrders': remoteMetrics['pendingOrders'] ?? localStats['pendingOrders'] ?? 0,
-            'pendingBills': remoteMetrics['billsInRange'] ?? remoteMetrics['billsCount'] ?? 0,
-            'totalBills': remoteMetrics['totalBills'] ?? localStats['totalBills'] ?? 0,
-          };
-        } else {
-          _stats = localStats;
-        }
-      });
+  Future<void> _loadBusinessName() async {
+    final name = await _db.getSetting('companyName');
+    if (name != null && name.isNotEmpty && mounted) {
+      setState(() => _businessName = name);
     }
   }
 
-  Future<void> _backgroundSync() async {
-    try {
-      await _sync.syncAll();
-      await _fetchRemoteStats();
-      final freshRecentBills = await _db.getBills(limit: 5);
-      if (mounted) {
-        setState(() {
-          _recentBills = freshRecentBills;
-        });
-      }
-    } catch (e) {
-      print('Background sync error: $e');
-    }
-  }
-
-  Future<void> _manualSync() async {
-    setState(() => _isSyncing = true);
-    final result = await _sync.manualSync();
-    setState(() => _isSyncing = false);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result.message),
-          backgroundColor: result == SyncResult.success ? AppTheme.secondaryColor : AppTheme.errorColor,
-        ),
-      );
-      if (result == SyncResult.success || result == SyncResult.partial) {
-        _loadData();
-      }
-    }
+  void _nav(Widget screen) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => screen),
+    ).then((_) => _loadBusinessName());
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _manualSync,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(),
-                    const SizedBox(height: 24),
-                    _buildStatsGrid(),
-                    const SizedBox(height: 32),
-                    Text('What to do?', style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 16),
-                    _buildQuickActions(),
-                    const SizedBox(height: 32),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Last Bills', style: Theme.of(context).textTheme.titleLarge),
-                        TextButton(
-                          onPressed: () => context.read<AppProvider>().setTabIndex(2), // Navigate to Billing
-                          child: const Text('View All'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    _buildRecentBills(),
-                  ],
-                ),
-              ),
-            ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Dashboard', style: Theme.of(context).textTheme.headlineLarge),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(
-                  _sync.isOnline ? Icons.cloud_done_rounded : Icons.cloud_off_rounded,
-                  size: 16,
-                  color: _sync.isOnline ? AppTheme.secondaryColor : AppTheme.errorColor,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _sync.isOnline ? 'System Online' : 'Offline Mode',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: _sync.isOnline ? AppTheme.secondaryColor : AppTheme.errorColor,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            )
-          ],
-        ),
-        Row(
-          children: [
-            IconButton(
-              onPressed: () => Navigator.pushNamed(context, '/settings'),
-              icon: const Icon(Icons.settings_outlined, color: AppTheme.textSecondaryLight),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatsGrid() {
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      childAspectRatio: 1.4,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
-      children: [
-        _PremiumStatCard(
-          title: 'Money This Week',
-          value: '₹${(_stats['weeklyRevenue'] ?? 0.0).toStringAsFixed(0)}',
-          icon: Icons.account_balance_wallet_rounded,
-          gradient: const LinearGradient(colors: [Color(0xFF3B82F6), Color(0xFF2563EB)]),
-          onTap: () => context.read<AppProvider>().setTabIndex(2), // Billing
-        ),
-        _PremiumStatCard(
-          title: 'New Orders',
-          value: '${_stats['pendingOrders']}',
-          icon: Icons.local_shipping_rounded,
-          gradient: const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFD97706)]),
-          onTap: () => context.read<AppProvider>().setTabIndex(1, ordersTabIndex: 0),
-        ),
-        _PremiumStatCard(
-          title: 'Service Visits',
-          value: '${_stats['pendingBookings'] ?? 0}',
-          icon: Icons.handyman_rounded,
-          gradient: const LinearGradient(colors: [Color(0xFF10B981), Color(0xFF059669)]),
-          onTap: () => context.read<AppProvider>().setTabIndex(1, ordersTabIndex: 0),
-        ),
-        _PremiumStatCard(
-          title: 'All Bills',
-          value: '${_stats['totalBills'] ?? 0}',
-          icon: Icons.receipt_long_rounded,
-          gradient: const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)]),
-          onTap: () {
-            context.read<AppProvider>().setTabIndex(2);
-            Navigator.pushNamed(context, '/billing/history');
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickActions() {
-    return Row(
-      children: [
-        Expanded(
-          child: _ActionCard(
-            title: 'New Bill', 
-            icon: Icons.add_circle_outline_rounded, 
-            color: AppTheme.accentColor, 
-            onTap: () => Navigator.pushNamed(context, '/billing/manual'),
-          )
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _ActionCard(
-            title: 'Add Product', 
-            icon: Icons.inventory_2_outlined, 
-            color: AppTheme.secondaryColor, 
-            onTap: () => Navigator.pushNamed(context, '/catalog', arguments: {'tab': 0}),
-          )
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _ActionCard(
-            title: 'Add Service', 
-            icon: Icons.handyman_outlined, 
-            color: const Color(0xFF8B5CF6), 
-            onTap: () => Navigator.pushNamed(context, '/catalog', arguments: {'tab': 1}),
-          )
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRecentBills() {
-    if (_recentBills.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          children: [
-            Icon(Icons.receipt_long_rounded, size: 48, color: AppTheme.textSecondaryLight.withOpacity(0.5)),
-            const SizedBox(height: 16),
-            Text('No recent bills found', style: Theme.of(context).textTheme.bodyLarge),
-          ],
-        ),
-      );
-    }
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _recentBills.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (ctx, index) {
-        final bill = _recentBills[index];
-        return Material(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => BillViewScreen(
-                    billId: bill.id,
-                    isEditable: true,
-                  ),
-                ),
-              ).then((_) {
-                _loadData();
-              });
-            },
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Top Header
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Theme.of(context).scaffoldBackgroundColor, borderRadius: BorderRadius.circular(12)),
-                    child: const Icon(Icons.receipt_long_rounded, color: AppTheme.accentColor),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(bill.customerName, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 16)),
-                        const SizedBox(height: 4),
-                        Text(bill.billNumber.isNotEmpty ? '#${bill.billNumber}' : '#${bill.id}', style: Theme.of(context).textTheme.bodyMedium),
-                      ],
-                    ),
-                  ),
                   Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('₹${bill.total.toStringAsFixed(0)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: bill.status == 'paid' ? AppTheme.secondaryColor.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                      Text(
+                        'Welcome',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                          fontWeight: FontWeight.w500,
                         ),
-                        child: Text(
-                          bill.status.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            color: bill.status == 'paid' ? AppTheme.secondaryColor : Colors.orange,
-                          ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _businessName,
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          letterSpacing: -0.5,
                         ),
                       ),
                     ],
                   ),
+                  IconButton(
+                    icon: Icon(Icons.settings_outlined, color: Theme.of(context).colorScheme.onSurface, size: 26),
+                    onPressed: () => _nav(const SettingsScreen()),
+                  ),
                 ],
               ),
-            ),
+              const SizedBox(height: 24),
+
+              // 2. Manage Section
+              Text(
+                'Manage',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildManageItem(
+                    icon: Icons.apartment_rounded,
+                    label: 'BUSINESS',
+                    onTap: () => _nav(const BusinessInfoScreen()),
+                  ),
+                  _buildManageItem(
+                    icon: Icons.person_rounded,
+                    label: 'CUSTOMER',
+                    onTap: () => _nav(const CustomersScreen()),
+                  ),
+                  _buildManageItem(
+                    icon: Icons.shopping_bag_rounded,
+                    label: 'PRODUCT',
+                    onTap: () => _nav(const CatalogScreen()),
+                  ),
+                  _buildManageItem(
+                    icon: Icons.article_rounded,
+                    label: 'TERMS',
+                    onTap: () => _nav(const TermsConditionsScreen()),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+
+              // 3. Discover Section
+              Text(
+                'Discover',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // 2-Column Grid of Action Cards
+              GridView.count(
+                crossAxisCount: 2,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: 1.15,
+                children: [
+                  _buildDiscoverCard(
+                    icon: Icons.note_add_outlined,
+                    title: 'Make Quotation',
+                    subtitle: 'Create a new quotation',
+                    onTap: () => _nav(const CreateQuotationScreen()),
+                  ),
+                  _buildDiscoverCard(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Quotation List',
+                    subtitle: 'Manage all quotations',
+                    onTap: () => _nav(const QuotationScreen()),
+                  ),
+                  _buildDiscoverCard(
+                    icon: Icons.post_add_rounded,
+                    title: 'Make Invoice',
+                    subtitle: 'Create a new invoice',
+                    onTap: () => _nav(const ManualBillingScreen()),
+                  ),
+                  _buildDiscoverCard(
+                    icon: Icons.format_list_bulleted_rounded,
+                    title: 'Invoice List',
+                    subtitle: 'Manage all invoices',
+                    onTap: () => _nav(const BillingDashboardScreen()),
+                  ),
+                  _buildDiscoverCard(
+                    icon: Icons.local_shipping_outlined,
+                    title: 'Purchase Order',
+                    subtitle: 'Manage all purchase orders',
+                    onTap: () => _nav(const PurchaseOrderScreen()),
+                  ),
+                  _buildDiscoverCard(
+                    icon: Icons.tune_rounded,
+                    title: 'Settings',
+                    subtitle: 'Manage app settings',
+                    onTap: () => _nav(const SettingsScreen()),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
-}
 
-class _PremiumStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final LinearGradient gradient;
-  final VoidCallback onTap;
-
-  const _PremiumStatCard({required this.title, required this.value, required this.icon, required this.gradient, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(color: gradient.colors.first.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 6)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(10)),
-                child: Icon(icon, color: Colors.white, size: 20),
-              ),
-            ],
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(title, style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12, fontWeight: FontWeight.w500)),
-            ],
-          ),
-        ],
-      ),
-    ),
-  );
-}
-}
-
-class _ActionCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _ActionCard({required this.title, required this.icon, required this.color, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(16),
-        ),
+  Widget _buildManageItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 78,
+          padding: const EdgeInsets.symmetric(vertical: 14),
         child: Column(
           children: [
             Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 24),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: Theme.of(context).colorScheme.onSurface, size: 22),
             ),
-            const SizedBox(height: 12),
-            Text(title, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
           ],
+        ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiscoverCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: Theme.of(context).colorScheme.onPrimary, size: 18),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade500,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ],
+        ),
         ),
       ),
     );

@@ -14,7 +14,9 @@ import NotFound from './pages/NotFound.jsx'
 import Login from './pages/Login.jsx'
 import RequireAuth from './routes/RequireAuth.jsx'
 import Profile from './pages/Profile.jsx'
+import Notifications from './pages/Notifications.jsx'
 import Orders from './pages/Orders.jsx'
+import Quotations from './pages/Quotations.jsx'
 import TrackOrder from './pages/TrackOrder.jsx'
 import Bookings from './pages/Bookings.jsx'
 import Services from './pages/Services.jsx'
@@ -131,10 +133,26 @@ function App() {
               }
             />
             <Route
+              path="/notifications"
+              element={
+                <RequireAuth>
+                  <Notifications />
+                </RequireAuth>
+              }
+            />
+            <Route
               path="/orders"
               element={
                 <RequireAuth>
                   <Orders />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/quotations"
+              element={
+                <RequireAuth>
+                  <Quotations />
                 </RequireAuth>
               }
             />

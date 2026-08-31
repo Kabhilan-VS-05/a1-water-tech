@@ -70,7 +70,6 @@ class _BillingDashboardScreenState extends State<BillingDashboardScreen> {
                 hintText: 'Search by Name, Company OR Invoice#',
                 hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
                 prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
-                filled: true,
                 fillColor: Theme.of(context).scaffoldBackgroundColor,
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),

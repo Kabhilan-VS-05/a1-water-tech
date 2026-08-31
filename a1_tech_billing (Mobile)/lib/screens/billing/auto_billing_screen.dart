@@ -237,7 +237,6 @@ class _AutoBillingScreenState extends State<AutoBillingScreen> {
                   DropdownButtonFormField<String>(
                     value: paymentMode == 'pending' ? 'cash' : paymentMode,
                     decoration: InputDecoration(
-                      filled: true,
                       fillColor: isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       border: OutlineInputBorder(

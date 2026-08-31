@@ -370,9 +370,11 @@ class _BillViewScreenState extends State<BillViewScreen> {
     final primaryColor = const Color(0xFF4F46E5);
     final surfaceColor = isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC);
 
-    return Scaffold(
-      backgroundColor: surfaceColor,
-      appBar: AppBar(
+    return DefaultTabController(
+      length: 3,
+      child: Scaffold(
+        backgroundColor: surfaceColor,
+        appBar: AppBar(
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -423,15 +425,30 @@ class _BillViewScreenState extends State<BillViewScreen> {
               tooltip: 'Delete Bill',
             ),
         ],
+        bottom: const TabBar(
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
+          indicatorWeight: 3,
+          labelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5),
+          tabs: [
+            Tab(text: 'CUSTOMER'),
+            Tab(text: 'ITEMS'),
+            Tab(text: 'SETTINGS'),
+          ],
+        ),
       ),
       body: Column(
         children: [
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            child: TabBarView(
+              children: [
+                // TAB 1: CUSTOMER
+                SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                   // Status & Payment Summary Card
                   _buildSectionCard(
                     child: Column(
@@ -445,7 +462,6 @@ class _BillViewScreenState extends State<BillViewScreen> {
                                 decoration: InputDecoration(
                                   labelText: 'Status',
                                   fillColor: isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
-                                  filled: true,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
@@ -473,7 +489,6 @@ class _BillViewScreenState extends State<BillViewScreen> {
                                 decoration: InputDecoration(
                                   labelText: 'Payment Mode',
                                   fillColor: isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
-                                  filled: true,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
                                     borderSide: BorderSide(color: isDark ? AppTheme.slate.withOpacity(0.2) : AppTheme.slate.shade200),
@@ -565,8 +580,50 @@ class _BillViewScreenState extends State<BillViewScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
-
+                  const SizedBox(height: 100),
+                ],
+              ),
+            ),
+            // TAB 2: ITEMS
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Items List Section
+                  _buildSectionHeader('Bill Items', Icons.receipt_long_outlined),
+                  ...(_isEditing ? _editableItems : _bill!.items).asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    return _buildItemTile(item, index);
+                  }),
+                  
+                  if (_isEditing)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: OutlinedButton.icon(
+                        onPressed: _addItem,
+                        icon: const Icon(Icons.add_circle_outline),
+                        label: const Text('Add Item to Bill'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: primaryColor,
+                          side: BorderSide(color: primaryColor.withOpacity(0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+                        ),
+                      ),
+                    ),
+                  
+                  const SizedBox(height: 100),
+                ],
+              ),
+            ),
+            // TAB 3: SETTINGS
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   if (_isEditing) ...[
                     _buildSectionHeader('Tax Settings', Icons.percent),
                     Container(
@@ -626,7 +683,6 @@ class _BillViewScreenState extends State<BillViewScreen> {
                                     value: _overrideGstType,
                                     isExpanded: true,
                                     decoration: InputDecoration(
-                                      filled: true,
                                       fillColor: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                                       border: OutlineInputBorder(
@@ -657,7 +713,6 @@ class _BillViewScreenState extends State<BillViewScreen> {
                                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                                     decoration: InputDecoration(
                                       hintText: _overrideGstType == 'percentage' ? 'e.g. 18' : 'e.g. 500',
-                                      filled: true,
                                       fillColor: Theme.of(context).brightness == Brightness.dark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
                                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                       border: OutlineInputBorder(
@@ -679,35 +734,13 @@ class _BillViewScreenState extends State<BillViewScreen> {
                     const SizedBox(height: 20),
                   ],
 
-                  // Items List Section
-                  _buildSectionHeader('Bill Items', Icons.receipt_long_outlined),
-                  ...(_isEditing ? _editableItems : _bill!.items).asMap().entries.map((entry) {
-                    final index = entry.key;
-                    final item = entry.value;
-                    return _buildItemTile(item, index);
-                  }),
-                  
-                  if (_isEditing)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: OutlinedButton.icon(
-                        onPressed: _addItem,
-                        icon: const Icon(Icons.add_circle_outline),
-                        label: const Text('Add Item to Bill'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: primaryColor,
-                          side: BorderSide(color: primaryColor.withOpacity(0.5)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-                        ),
-                      ),
-                    ),
-                  
-                  const SizedBox(height: 100), // Space for fab
+                  const SizedBox(height: 100),
                 ],
               ),
             ),
-          ),
+          ],
+        ),
+      ),
           
           // Bottom Summary Bar
           Container(
@@ -754,6 +787,7 @@ class _BillViewScreenState extends State<BillViewScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -952,7 +986,6 @@ class _BillViewScreenState extends State<BillViewScreen> {
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(color: isDark ? AppTheme.slate.shade400 : AppTheme.slate.shade500, fontSize: 13),
-        filled: true,
         fillColor: isDark ? Theme.of(context).scaffoldBackgroundColor : const Color(0xFFF8FAFC),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

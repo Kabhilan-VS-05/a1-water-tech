@@ -94,7 +94,6 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
                 value: type,
                 decoration: InputDecoration(
                   labelText: 'TYPE',
-                  filled: true,
                   fillColor: Theme.of(context).scaffoldBackgroundColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
@@ -115,7 +114,6 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
                 decoration: InputDecoration(
                   labelText: 'Terms and condition',
                   hintText: 'Enter terms and conditions text...',
-                  filled: true,
                   fillColor: Theme.of(context).scaffoldBackgroundColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),

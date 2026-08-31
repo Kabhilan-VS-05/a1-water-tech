@@ -77,8 +77,6 @@ class _QuotationScreenState extends State<QuotationScreen> {
                 hintText: 'Search by Name, Company OR Quotation#',
                 hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
                 prefixIcon: const Icon(Icons.search, size: 20, color: Colors.grey),
-                filled: true,
-                fillColor: const Color(0xFFF1F3F6),
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
               ),
@@ -315,7 +313,6 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                 controller: labelCtrl,
                 decoration: InputDecoration(
                   labelText: 'Other Charge Label',
-                  filled: true,
                   fillColor: Theme.of(context).scaffoldBackgroundColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
@@ -326,7 +323,6 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Other Charge Amount',
-                  filled: true,
                   fillColor: Theme.of(context).scaffoldBackgroundColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
@@ -345,7 +341,6 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     labelText: 'GST (IN %)',
-                    filled: true,
                     fillColor: Theme.of(context).scaffoldBackgroundColor,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
@@ -579,7 +574,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                   decoration: BoxDecoration(
                     color: Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
+                    border: Border.all(color: Theme.of(context).dividerColor),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -590,7 +585,6 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
                       ),
                       Checkbox(
                         value: _isRoundedOff,
-                        activeColor: Colors.black87,
                         onChanged: (v) => setState(() => _isRoundedOff = v ?? false),
                       ),
                     ],
@@ -660,7 +654,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -715,7 +709,7 @@ class _CreateQuotationScreenState extends State<CreateQuotationScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -829,8 +823,6 @@ class _SelectCustomerSheetState extends State<_SelectCustomerSheet> {
                 decoration: InputDecoration(
                   hintText: 'Search by Name OR Company Name',
                   prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: const Color(0xFFF1F3F6),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
@@ -907,8 +899,6 @@ class _SelectProductSheetState extends State<_SelectProductSheet> {
                 decoration: InputDecoration(
                   hintText: 'Search by Name',
                   prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: const Color(0xFFF1F3F6),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
@@ -964,7 +954,7 @@ class _SelectProductSheetState extends State<_SelectProductSheet> {
                 decoration: BoxDecoration(
                   color: Theme.of(context).cardColor,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+                  border: Border.all(color: Theme.of(context).dividerColor),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -986,7 +976,6 @@ class _SelectProductSheetState extends State<_SelectProductSheet> {
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
                   labelText: 'Quantity',
-                  filled: true,
                   fillColor: Theme.of(context).cardColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
                 ),
@@ -997,7 +986,6 @@ class _SelectProductSheetState extends State<_SelectProductSheet> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Price',
-                  filled: true,
                   fillColor: Theme.of(context).cardColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
                 ),
@@ -1009,7 +997,6 @@ class _SelectProductSheetState extends State<_SelectProductSheet> {
                 decoration: InputDecoration(
                   labelText: 'Description',
                   hintText: 'Optional description (0/2000)',
-                  filled: true,
                   fillColor: Theme.of(context).cardColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade200)),
                 ),
@@ -1175,8 +1162,8 @@ class _QuotationDetailScreenState extends State<QuotationDetailScreen> {
               },
             ),
             _buildBottomAction(
-              icon: Icons.more_horiz_rounded,
-              label: 'More',
+              icon: Icons.print_rounded,
+              label: 'Print',
               onTap: () async {
                 final pdfBytes = await PdfService.generateQuotation(q);
                 await Printing.layoutPdf(onLayout: (_) async => pdfBytes, name: '${q.quotationNumber}.pdf');

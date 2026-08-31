@@ -59,7 +59,7 @@ export default function useQuotations(userId, phone, email, refreshKey = 0) {
       const response = await fetch(`${baseUrl}/quotations/${quotationId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, status }),
+        body: JSON.stringify({ userId, phone, email, status }),
       })
 
       if (!response.ok) {

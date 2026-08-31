@@ -999,7 +999,7 @@ async function fetchQuotations(userId, phone, email) {
 }
 
 async function updateQuotationStatus(id, data) {
-  const { userId, status } = data
+  const { userId, phone, email, status } = data
   const normalizedUserId = String(userId || '').trim()
 
   if (!normalizedUserId) {
@@ -1013,15 +1013,90 @@ async function updateQuotationStatus(id, data) {
   const pool = getPool()
 
   const checkResult = await safeQuery(pool.query(
-    'SELECT * FROM quotations WHERE id = $1 AND customer_id = $2',
-    [id, normalizedUserId]
+    'SELECT * FROM quotations WHERE id = $1',
+    [id]
   ))
 
   if (checkResult.rows.length === 0) {
-    return response(404, { message: 'Quotation not found or unauthorized' })
+    return response(404, { message: 'Quotation not found' })
   }
 
   const quotation = checkResult.rows[0]
+
+  // Authorization check
+  let isAuthorized = (quotation.customer_id === normalizedUserId)
+
+  if (!isAuthorized) {
+    // Collect user's known phones and emails to verify ownership
+    const phonesSet = new Set()
+    const emailsSet = new Set()
+
+    if (phone) {
+      const digits = String(phone).replace(/\D/g, '')
+      const p = digits.length >= 10 ? digits.slice(-10) : digits
+      if (p) phonesSet.add(p)
+    }
+    if (email) {
+      emailsSet.add(String(email).trim().toLowerCase())
+    }
+
+    try {
+      const addrRes = await safeQuery(pool.query(
+        'SELECT phone, email FROM user_addresses WHERE user_id = $1',
+        [normalizedUserId]
+      ))
+      for (const row of addrRes.rows || []) {
+        if (row.phone) {
+          const digits = String(row.phone).replace(/\D/g, '')
+          const p = digits.length >= 10 ? digits.slice(-10) : digits
+          if (p) phonesSet.add(p)
+        }
+        if (row.email) {
+          const em = String(row.email).trim().toLowerCase()
+          if (em) emailsSet.add(em)
+        }
+      }
+
+      const orderRes = await safeQuery(pool.query(
+        `SELECT customer->>'phone' as phone, customer->>'email' as email, address_snapshot->>'phone' as addr_phone FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10`,
+        [normalizedUserId]
+      ))
+      for (const row of orderRes.rows || []) {
+        const orderPhone = row.phone || row.addr_phone
+        if (orderPhone) {
+          const digits = String(orderPhone).replace(/\D/g, '')
+          const p = digits.length >= 10 ? digits.slice(-10) : digits
+          if (p) phonesSet.add(p)
+        }
+        if (row.email) {
+          const em = String(row.email).trim().toLowerCase()
+          if (em) emailsSet.add(em)
+        }
+      }
+    } catch (e) {
+      console.error('Error discovering user contact info for updateQuotationStatus:', e)
+    }
+
+    // Check if quotation matches any of the discovered contact info
+    if (quotation.customer_phone) {
+      const qDigits = String(quotation.customer_phone).replace(/\D/g, '')
+      const qp = qDigits.length >= 10 ? qDigits.slice(-10) : qDigits
+      if (phonesSet.has(qp)) {
+        isAuthorized = true
+      }
+    }
+    
+    if (!isAuthorized && quotation.customer_email) {
+      const qem = String(quotation.customer_email).trim().toLowerCase()
+      if (emailsSet.has(qem)) {
+        isAuthorized = true
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    return response(404, { message: 'Quotation not found or unauthorized' })
+  }
 
   if (quotation.status === 'accepted') {
     return response(400, { message: 'Quotation is already accepted' })
@@ -1067,16 +1142,16 @@ async function updateQuotationStatus(id, data) {
         status,
         created_at,
         updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
+      ) values ($1, $2, $3::jsonb, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, now(), now())
       `,
       [
         orderId,
         normalizedUserId,
-        customerObj,
+        JSON.stringify(customerObj),
         -1,
-        addressObj,
-        quotation.items,
-        billingObj,
+        JSON.stringify(addressObj),
+        typeof quotation.items === 'string' ? quotation.items : JSON.stringify(quotation.items),
+        JSON.stringify(billingObj),
         quotation.subtotal,
         quotation.total,
         'confirmed'

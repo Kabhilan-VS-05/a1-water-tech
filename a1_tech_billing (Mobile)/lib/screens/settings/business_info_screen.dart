@@ -240,7 +240,7 @@ class _BusinessInfoScreenState extends State<BusinessInfoScreen> {
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
+                border: Border.all(color: Theme.of(context).dividerColor),
               ),
               child: Text(
                 'Bank Info\nAccount Name : ${_bankAccountNameCtrl.text.isEmpty ? '######' : _bankAccountNameCtrl.text}\nAccount Number : ${_bankAccountNumberCtrl.text.isEmpty ? '#######' : _bankAccountNumberCtrl.text}\nBank Name : ${_bankNameCtrl.text.isEmpty ? '######' : _bankNameCtrl.text}',
@@ -346,7 +346,6 @@ class _BusinessInfoScreenState extends State<BusinessInfoScreen> {
           labelText: label,
           labelStyle: TextStyle(fontSize: 13, color: Colors.grey.shade600),
           hintText: hint,
-          filled: true,
           fillColor: Theme.of(context).cardColor,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: Colors.grey.shade300)),

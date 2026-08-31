@@ -178,7 +178,6 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> {
                 controller: labelCtrl,
                 decoration: InputDecoration(
                   labelText: 'Other Charge Label',
-                  filled: true,
                   fillColor: Theme.of(context).scaffoldBackgroundColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
@@ -189,7 +188,6 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Other Charge Amount',
-                  filled: true,
                   fillColor: Theme.of(context).scaffoldBackgroundColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
@@ -208,7 +206,6 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     labelText: 'GST (IN %)',
-                    filled: true,
                     fillColor: Theme.of(context).scaffoldBackgroundColor,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                   ),
@@ -310,7 +307,6 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> {
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: InputDecoration(
                   labelText: 'Amount (₹)',
-                  filled: true,
                   fillColor: Theme.of(context).scaffoldBackgroundColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
@@ -320,7 +316,6 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> {
                 value: mode,
                 decoration: InputDecoration(
                   labelText: 'Payment Mode',
-                  filled: true,
                   fillColor: Theme.of(context).scaffoldBackgroundColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
@@ -340,7 +335,6 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> {
                 controller: noteCtrl,
                 decoration: InputDecoration(
                   labelText: 'Note / Transaction Ref',
-                  filled: true,
                   fillColor: Theme.of(context).scaffoldBackgroundColor,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
@@ -566,9 +560,9 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).cardColor,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
+                    border: Border.all(color: Theme.of(context).dividerColor),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -576,7 +570,6 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> {
                       const Text('ROUND OFF AMOUNT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, letterSpacing: 0.5)),
                       Checkbox(
                         value: _isRoundedOff,
-                        activeColor: Colors.black87,
                         onChanged: (v) => setState(() => _isRoundedOff = v ?? false),
                       ),
                     ],
@@ -644,7 +637,7 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -694,7 +687,7 @@ class _ManualBillingScreenState extends State<ManualBillingScreen> {
       decoration: BoxDecoration(
         color: Theme.of(context).cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: Theme.of(context).dividerColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -800,8 +793,6 @@ class _SelectCustomerSheetState extends State<_SelectCustomerSheet> {
                 decoration: InputDecoration(
                   hintText: 'Search by Name OR Company Name',
                   prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: const Color(0xFFF1F3F6),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
@@ -865,7 +856,7 @@ class _SelectBillProductSheetState extends State<_SelectBillProductSheet> {
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+                  decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(12), border: Border.all(color: Theme.of(context).dividerColor)),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -958,8 +949,6 @@ class _SelectBillProductSheetState extends State<_SelectBillProductSheet> {
                 decoration: InputDecoration(
                   hintText: 'Search by Name',
                   prefixIcon: const Icon(Icons.search),
-                  filled: true,
-                  fillColor: const Color(0xFFF1F3F6),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
